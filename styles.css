@@ -35,3 +35,183 @@ canvas {
   outline: none;
   touch-action: none;
 }
+
+.mobile-controls,
+.mobile-auth {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 700px) {
+  html.mobile-device,
+  html.mobile-device body {
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: radial-gradient(circle at 50% 15%, #242833 0%, #111319 48%, #08090c 100%);
+  }
+
+  html.mobile-device body {
+    display: block;
+  }
+
+  html.mobile-device .game-shell {
+    position: relative;
+    width: 100vw;
+    height: 100dvh;
+    aspect-ratio: auto;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 20%, #252a36 0%, #11141b 52%, #08090c 100%);
+  }
+
+  html.mobile-device canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  html.mobile-device .mobile-controls {
+    display: none;
+  }
+
+  html.mobile-device .mobile-gameplay canvas {
+    width: 100vw;
+    height: min(75vw, 58dvh);
+    max-height: 58dvh;
+    aspect-ratio: 4 / 3;
+    background: #050507;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  }
+
+  html.mobile-device .mobile-gameplay .mobile-controls {
+    position: absolute;
+    inset: min(75vw, 58dvh) 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 210px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+    touch-action: none;
+    background:
+      radial-gradient(circle at 50% 42%, rgba(105, 120, 145, 0.18), transparent 38%),
+      linear-gradient(180deg, #151820 0%, #090b10 100%);
+  }
+
+  html.mobile-device .joystick {
+    position: relative;
+    width: clamp(150px, 43vw, 210px);
+    aspect-ratio: 1;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    touch-action: none;
+    background:
+      radial-gradient(circle at 38% 32%, #626975 0%, #3c424c 38%, #22262d 72%, #111318 100%);
+    border: 4px solid #747c88;
+    box-shadow:
+      inset 0 7px 12px rgba(255, 255, 255, 0.14),
+      inset 0 -12px 18px rgba(0, 0, 0, 0.55),
+      0 14px 28px rgba(0, 0, 0, 0.55),
+      0 0 0 8px rgba(12, 14, 18, 0.62);
+  }
+
+  html.mobile-device .joystick-ring {
+    position: absolute;
+    inset: 18%;
+    border-radius: 50%;
+    border: 2px solid rgba(220, 228, 240, 0.2);
+    box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.5);
+  }
+
+  html.mobile-device .joystick-stick {
+    width: 42%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 34% 28%, #9aa2af 0%, #656d79 32%, #3d434d 68%, #252930 100%);
+    border: 3px solid #a2a9b3;
+    box-shadow:
+      inset 0 5px 8px rgba(255, 255, 255, 0.2),
+      inset 0 -7px 10px rgba(0, 0, 0, 0.46),
+      0 9px 16px rgba(0, 0, 0, 0.55);
+    transition: transform 60ms linear;
+    will-change: transform;
+  }
+
+  html.mobile-device .joystick-label {
+    color: rgba(220, 226, 236, 0.54);
+    font-size: 12px;
+    letter-spacing: 0.34em;
+    padding-left: 0.34em;
+  }
+
+  html.mobile-device .mobile-auth:not([hidden]) {
+    position: absolute;
+    z-index: 5;
+    left: 50%;
+    top: 52%;
+    transform: translate(-50%, -50%);
+    width: min(88vw, 480px);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 18px;
+    background: rgba(20, 23, 31, 0.96);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.62);
+  }
+
+  html.mobile-device .mobile-auth label {
+    display: grid;
+    gap: 7px;
+    color: #e8c296;
+    font-size: 16px;
+  }
+
+  html.mobile-device .mobile-auth input,
+  html.mobile-device .mobile-auth button {
+    width: 100%;
+    min-height: 52px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 11px;
+    color: #fff;
+    font: inherit;
+    font-size: 17px;
+  }
+
+  html.mobile-device .mobile-auth input {
+    padding: 0 14px;
+    background: #1d2028;
+  }
+
+  html.mobile-device .mobile-auth button {
+    padding: 8px 12px;
+    background: rgb(190, 120, 70);
+  }
+
+  html.mobile-device .mobile-auth-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  html.mobile-device .mobile-auth-status {
+    min-height: 20px;
+    margin: 0;
+    color: #dce8f8;
+    font-size: 14px;
+    line-height: 1.35;
+    text-align: center;
+  }
+
+  html.mobile-device .mobile-auth .mobile-auth-back,
+  html.mobile-device .mobile-auth [data-auth-action="logout"] {
+    background: rgb(180, 60, 60);
+  }
+}

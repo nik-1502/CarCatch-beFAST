@@ -12,6 +12,8 @@ import {
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const MOBILE_DEVICE = navigator.maxTouchPoints > 0
+  && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1024px)").matches);
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -132,6 +134,7 @@ let activeProfileField = "username";
 let profileMessage = "";
 let profileBusy = false;
 let leaderboardTime = 30;
+let mobileInput = { x: 0, y: 0 };
 
 const carLength = 40;
 const collectibleRadius = 10;
@@ -1416,34 +1419,36 @@ function drawSelectionTitle(label, fillColor, borderColor) {
 }
 
 function drawProfileIconButton() {
-  const button = rect(20, 20, 54, 54);
+  const size = MOBILE_DEVICE ? 74 : 54;
+  const button = rect(20, 20, size, size);
   buttons.profile = button;
   roundedRect(button, rgb(OBSTACLE_MID), null, 1, 10);
-  circle(v(button.x + button.w / 2, button.y + 18), 8, rgb(WHITE));
+  circle(v(button.x + button.w / 2, button.y + button.h * 0.33), button.w * 0.15, rgb(WHITE));
   ctx.beginPath();
-  ctx.arc(button.x + button.w / 2, button.y + 43, 14, Math.PI, 0);
-  ctx.lineTo(button.x + button.w / 2 + 14, button.y + 46);
-  ctx.lineTo(button.x + button.w / 2 - 14, button.y + 46);
+  ctx.arc(button.x + button.w / 2, button.y + button.h * 0.78, button.w * 0.26, Math.PI, 0);
+  ctx.lineTo(button.x + button.w * 0.76, button.y + button.h * 0.85);
+  ctx.lineTo(button.x + button.w * 0.24, button.y + button.h * 0.85);
   ctx.closePath();
   ctx.fillStyle = rgb(WHITE);
   ctx.fill();
 }
 
 function drawLeaderboardIconButton() {
-  const button = rect(20, 84, 54, 54);
+  const size = MOBILE_DEVICE ? 74 : 54;
+  const button = rect(20, MOBILE_DEVICE ? 104 : 84, size, size);
   buttons.leaderboard = button;
   roundedRect(button, rgb(OBSTACLE_MID), null, 1, 10);
   const crown = [
-    v(button.x + 11, button.y + 18),
-    v(button.x + 20, button.y + 29),
-    v(button.x + 27, button.y + 14),
-    v(button.x + 34, button.y + 29),
-    v(button.x + 43, button.y + 18),
-    v(button.x + 39, button.y + 39),
-    v(button.x + 15, button.y + 39),
+    v(button.x + button.w * 0.2, button.y + button.h * 0.32),
+    v(button.x + button.w * 0.37, button.y + button.h * 0.55),
+    v(button.x + button.w * 0.5, button.y + button.h * 0.25),
+    v(button.x + button.w * 0.63, button.y + button.h * 0.55),
+    v(button.x + button.w * 0.8, button.y + button.h * 0.32),
+    v(button.x + button.w * 0.72, button.y + button.h * 0.72),
+    v(button.x + button.w * 0.28, button.y + button.h * 0.72),
   ];
   poly(crown, rgb(WHITE));
-  roundedRect(rect(button.x + 14, button.y + 41, 26, 4), rgb(WHITE), null, 1, 2);
+  roundedRect(rect(button.x + button.w * 0.26, button.y + button.h * 0.76, button.w * 0.48, button.h * 0.08), rgb(WHITE), null, 1, 2);
 }
 
 function drawLeaderboardMapPreview(mapIndex, x, y, width, height) {
@@ -1559,7 +1564,7 @@ function drawMenu() {
 }
 
 function drawBackButton() {
-  buttons.back = rect(WIDTH - 120, 20, 100, 40);
+  buttons.back = MOBILE_DEVICE ? rect(WIDTH - 170, 20, 150, 56) : rect(WIDTH - 120, 20, 100, 40);
   roundedRect(buttons.back, rgb(RELAXED_RED), null, 1, 8);
   fitText("Back", buttons.back, 28);
 }
@@ -1910,14 +1915,20 @@ function updateGame() {
     finishRound();
     return;
   }
-  if (keys.has("ArrowUp")) velocity = Math.min(maxSpeed, velocity + acceleration);
+  const mobileThrottle = MOBILE_DEVICE && Math.abs(mobileInput.y) > 0.08 ? -mobileInput.y : 0;
+  if (mobileThrottle > 0) velocity = Math.min(maxSpeed, velocity + acceleration * mobileThrottle);
+  else if (mobileThrottle < 0) velocity = Math.max(-maxSpeed / 2, velocity + acceleration * mobileThrottle);
+  else if (keys.has("ArrowUp")) velocity = Math.min(maxSpeed, velocity + acceleration);
   else if (keys.has("ArrowDown")) velocity = Math.max(-maxSpeed / 2, velocity - acceleration);
   else if (velocity > 0) velocity = Math.max(0, velocity - stopFriction);
   else if (velocity < 0) velocity = Math.min(0, velocity + stopFriction);
 
   const currentTurn = Math.abs(velocity) < 2 ? turnSpeed * 1.1 : turnSpeed;
-  if (keys.has("ArrowLeft")) carAngle -= currentTurn;
-  if (keys.has("ArrowRight")) carAngle += currentTurn;
+  if (MOBILE_DEVICE && Math.abs(mobileInput.x) > 0.08) carAngle += currentTurn * mobileInput.x;
+  else {
+    if (keys.has("ArrowLeft")) carAngle -= currentTurn;
+    if (keys.has("ArrowRight")) carAngle += currentTurn;
+  }
   const rad = carAngle * Math.PI / 180;
   const dir = v(Math.cos(rad), Math.sin(rad));
   carPos = add(carPos, mul(dir, velocity));
@@ -2134,6 +2145,27 @@ window.addEventListener("keydown", (event) => {
 window.addEventListener("keyup", (event) => {
   keys.delete(event.key);
 });
+
+window.CarCatch = {
+  getState: () => state,
+  getCurrentUser: () => currentUser ? { key: currentUser.key, username: currentUser.username } : null,
+  getProfileStatus: () => profileMessage,
+  goToMenu: () => {
+    state = "menu";
+  },
+  logout: () => logoutUser(),
+  setProfileCredentials: (accountName, password) => {
+    profileUsername = accountName;
+    profilePassword = password;
+  },
+  submitProfile: (action) => void submitProfile(action),
+  setMobileInput: (horizontal, vertical) => {
+    mobileInput = {
+      x: Math.max(-1, Math.min(1, horizontal)),
+      y: Math.max(-1, Math.min(1, vertical)),
+    };
+  },
+};
 
 collectiblePos = spawnCollectible();
 requestAnimationFrame(drawFrame);
