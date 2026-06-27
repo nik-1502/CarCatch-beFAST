@@ -54,7 +54,7 @@ git push
 Die Browser-Version verwendet `@supabase/supabase-js` als ES-Modul. Deshalb muss das Spiel ueber einen lokalen Webserver oder GitHub Pages laufen; ein direktes Oeffnen per `file://` wird nicht unterstuetzt.
 
 1. Fuehre `migrations/001_auth_highscores.sql` einmal im Supabase SQL Editor aus.
-2. Stelle unter `Authentication` sicher, dass Email/Password aktiviert ist.
+2. Stelle unter `Authentication` sicher, dass Email/Password aktiviert und `Confirm email` deaktiviert ist. Das Spiel erzeugt intern eine technische Kennung aus dem Account-Namen; Spieler melden sich nur mit Account-Name und Passwort an.
 3. URL und oeffentlicher Publishable Key liegen zentral in `config.js`.
 
 Supabase Auth speichert und erneuert die Sitzung automatisch. Highscores werden lokal zwischengespeichert und bei erreichbarem Supabase mit der Tabelle `highscores` synchronisiert. Der lokale Cache haelt das Spiel bei Netzwerkfehlern funktionsfaehig.

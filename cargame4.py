@@ -971,13 +971,13 @@ def draw_menu():
 
     # Zeit Auswahl Text
     info = font_small.render("Choose your Time", True, BEIGE)
-    screen.blit(info, info.get_rect(center=(WIDTH // 2, 250)))
+    screen.blit(info, info.get_rect(center=(WIDTH // 2, 293)))
 
     # Zeit Buttons generieren und zeichnen
     time_buttons = []
     start_x = 100
     gap = 90
-    y_pos = 300
+    y_pos = 343
     
     # Zweizeilig falls nötig, hier passt es knapp in eine Reihe oder wir brechen um
     # Wir machen eine Reihe zentriert

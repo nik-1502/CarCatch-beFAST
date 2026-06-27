@@ -61,6 +61,10 @@ const THEMES = [
   { name: "Ice", bg: [220, 240, 255], structure: "ice" },
   { name: "Neon", bg: [0, 0, 0], lineColor: [200, 0, 200], structure: "neon" },
 ];
+const DEFAULT_THEME_SETTINGS = THEMES.map((theme) => ({
+  bg: [...theme.bg],
+  lineColor: theme.lineColor ? [...theme.lineColor] : null,
+}));
 
 const offsetX = 180;
 const offsetY = 140;
@@ -151,9 +155,17 @@ const bgStates = new Map();
 const buttons = {};
 const USER_STORAGE_KEY = "carcatch-users";
 const SESSION_STORAGE_KEY = "carcatch-session";
-const GUEST_SCORES_STORAGE_KEY = "carcatch-guest-top-scores";
 const SUPABASE_USER_CACHE_KEY = "carcatch-supabase-user";
 const SUPABASE_SCORE_CACHE_PREFIX = "carcatch-supabase-scores:";
+const GAME_SETTINGS_STORAGE_PREFIX = "carcatch-settings:";
+
+try {
+  localStorage.removeItem("carcatch-guest-top-scores");
+  localStorage.removeItem("carcatch-settings:guest");
+  localStorage.removeItem("carcatch-backgrounds");
+} catch (_) {
+  // Storage can be unavailable in privacy-restricted browser contexts.
+}
 
 const keys = new Set();
 
@@ -186,6 +198,12 @@ function normalizeUsername(username) {
   return username.trim().toLocaleLowerCase();
 }
 
+function usernameToAuthEmail(username) {
+  const bytes = new TextEncoder().encode(normalizeUsername(username));
+  const encodedUsername = [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  return `u-${encodedUsername}@users.carcatch.invalid`;
+}
+
 function bytesToBase64(bytes) {
   return btoa(String.fromCharCode(...bytes));
 }
@@ -206,7 +224,7 @@ function restoreUserSession() {
     const cachedSupabaseUser = JSON.parse(localStorage.getItem(SUPABASE_USER_CACHE_KEY) || "null");
     if (cachedSupabaseUser?.id) {
       currentUser = { key: cachedSupabaseUser.id, username: cachedSupabaseUser.username, email: cachedSupabaseUser.email, source: "supabase" };
-      profileUsername = cachedSupabaseUser.email || "";
+      profileUsername = cachedSupabaseUser.username || "";
       return;
     }
   } catch (_) {
@@ -255,7 +273,7 @@ async function submitLocalProfile(action) {
     const store = loadUserStore();
     if (action === "create") {
       if (store.users[userKey]) {
-        profileMessage = "This username already exists.";
+        profileMessage = "This account already exists. Please sign in instead.";
         return;
       }
       const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -281,6 +299,7 @@ async function submitLocalProfile(action) {
 
     const account = loadUserStore().users[userKey];
     currentUser = { key: userKey, username: account.username, source: "local" };
+    loadGameSettings();
     localStorage.setItem(SESSION_STORAGE_KEY, userKey);
     profilePassword = "";
     profileMessage = action === "create" ? "Account created and signed in." : "Signed in successfully.";
@@ -297,6 +316,7 @@ function isNetworkFailure(error) {
 }
 
 function cacheSupabaseUser(user) {
+  const userChanged = currentUser?.source !== "supabase" || currentUser.key !== user.id;
   const cachedUser = {
     id: user.id,
     email: user.email || "",
@@ -304,14 +324,15 @@ function cacheSupabaseUser(user) {
   };
   localStorage.setItem(SUPABASE_USER_CACHE_KEY, JSON.stringify(cachedUser));
   currentUser = { key: cachedUser.id, username: cachedUser.username, email: cachedUser.email, source: "supabase" };
-  profileUsername = cachedUser.email;
+  profileUsername = cachedUser.username;
+  if (userChanged) loadGameSettings();
 }
 
 async function submitProfile(action) {
   if (profileBusy) return;
-  const email = profileUsername.trim().toLowerCase();
-  if (!/^\S+@\S+\.\S+$/.test(email)) {
-    profileMessage = "Please enter a valid email address.";
+  const username = profileUsername.trim();
+  if (normalizeUsername(username).length < 3) {
+    profileMessage = "Account name must contain at least 3 characters.";
     return;
   }
   if (profilePassword.length < 6) {
@@ -322,13 +343,17 @@ async function submitProfile(action) {
   profileBusy = true;
   profileMessage = "Connecting to Supabase...";
   try {
-    const username = email.split("@")[0];
+    const email = usernameToAuthEmail(username);
     const data = action === "create"
       ? await signUpWithSupabase(email, profilePassword, username)
       : await signInWithSupabase(email, profilePassword);
+    if (action === "create" && data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      profileMessage = "This account already exists. Please sign in instead.";
+      return;
+    }
     if (!data.session) {
       profilePassword = "";
-      profileMessage = "Check your email to confirm the account.";
+      profileMessage = "Disable email confirmation in Supabase Auth settings.";
       return;
     }
     cacheSupabaseUser(data.user);
@@ -357,6 +382,7 @@ function logoutUser() {
   profileMessage = "Signed out.";
   localStorage.removeItem(SESSION_STORAGE_KEY);
   localStorage.removeItem(SUPABASE_USER_CACHE_KEY);
+  loadGameSettings();
 }
 
 function normalizeTopScores(scores) {
@@ -454,11 +480,7 @@ async function initializeSupabaseIntegration() {
 function loadTopScores() {
   if (currentUser?.source === "supabase") return readSupabaseScoreCache(currentUser.key);
   if (currentUser?.source === "local") return normalizeTopScores(getCurrentUserData()?.highscores);
-  try {
-    return normalizeTopScores(JSON.parse(localStorage.getItem(GUEST_SCORES_STORAGE_KEY) || "{}"));
-  } catch (_) {
-    return normalizeTopScores({});
-  }
+  return normalizeTopScores({});
 }
 
 function saveTopScores(scores) {
@@ -468,8 +490,6 @@ function saveTopScores(scores) {
     void saveSupabaseHighscores(currentUser.key, normalized).catch(() => {});
   } else if (currentUser?.source === "local") {
     updateCurrentUserData({ highscores: normalized });
-  } else {
-    localStorage.setItem(GUEST_SCORES_STORAGE_KEY, JSON.stringify(normalized));
   }
 }
 
@@ -933,39 +953,105 @@ const BG_CATEGORIES = {
   map: { name: "Map Editor", selected: backgroundIndex("map_topography"), options: BACKGROUND_LIBRARY },
   score: { name: "Scoreboard", selected: backgroundIndex("menu_particles"), options: BACKGROUND_LIBRARY },
 };
+const DEFAULT_BACKGROUND_SELECTIONS = Object.fromEntries(
+  Object.entries(BG_CATEGORIES).map(([key, category]) => [key, category.options[category.selected][2]]),
+);
 
 const BACKGROUNDS_PER_PAGE = 6;
 let backgroundLibraryPage = 0;
 
-const BG_STORAGE_KEY = "carcatch-backgrounds";
+function getGameSettingsStorageKey() {
+  if (!currentUser) return null;
+  return `${GAME_SETTINGS_STORAGE_PREFIX}${currentUser.source}:${currentUser.key}`;
+}
 
-function loadBackgroundSelections() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(BG_STORAGE_KEY) || "{}");
+function resetGameSettingsToDefaults(resetBackgrounds = true) {
+  selectedMapIndex = 0;
+  selectedThemeIndex = 0;
+  obstacleShape = "circle";
+  obstacleColor = [...FULL_PALETTE[64]];
+  selectedTime = 30;
+  selectedCarIndex = 2;
+  selectedCar = CAR_MODELS[selectedCarIndex].id;
+  selectedColor = [...FULL_PALETTE[47]];
+  selectedBoostColor = [...FULL_PALETTE[83]];
+  THEMES.forEach((theme, index) => {
+    theme.bg = [...DEFAULT_THEME_SETTINGS[index].bg];
+    if (DEFAULT_THEME_SETTINGS[index].lineColor) theme.lineColor = [...DEFAULT_THEME_SETTINGS[index].lineColor];
+  });
+  if (resetBackgrounds) {
     Object.entries(BG_CATEGORIES).forEach(([key, category]) => {
-      const legacySpotlightId = key === "garage" ? "garage_spotlights" : "score_spotlights";
-      const savedValue = saved[key] === "Spotlights" ? legacySpotlightId : saved[key];
-      const savedIndex = category.options.findIndex(([name, , id]) => id === savedValue || name === savedValue);
-      if (savedIndex >= 0) category.selected = savedIndex;
+      const defaultId = DEFAULT_BACKGROUND_SELECTIONS[key];
+      const defaultIndex = category.options.findIndex(([, , id]) => id === defaultId);
+      if (defaultIndex >= 0) category.selected = defaultIndex;
     });
+  }
+  obstacles = MAPS[selectedMapIndex].pos;
+}
+
+function saveGameSettings() {
+  try {
+    const storageKey = getGameSettingsStorageKey();
+    if (!storageKey) return;
+    const backgrounds = Object.fromEntries(
+      Object.entries(BG_CATEGORIES).map(([key, category]) => [key, category.options[category.selected][2]]),
+    );
+    const settings = {
+      selectedMapIndex,
+      selectedThemeIndex,
+      obstacleShape,
+      obstacleColor,
+      selectedTime,
+      selectedCarIndex,
+      selectedColor,
+      selectedBoostColor,
+      themes: THEMES.map((theme) => ({ bg: theme.bg, lineColor: theme.lineColor || null })),
+      backgrounds,
+    };
+    localStorage.setItem(storageKey, JSON.stringify(settings));
   } catch (_) {
-    // Keep the defaults when browser storage is unavailable or invalid.
+    // The current game remains usable when browser storage is unavailable.
   }
 }
 
-function saveBackgroundSelections() {
+function loadGameSettings(preserveBackgrounds = false) {
+  resetGameSettingsToDefaults(!preserveBackgrounds);
   try {
-    const selections = {};
-    Object.entries(BG_CATEGORIES).forEach(([key, category]) => {
-      selections[key] = category.options[category.selected][2];
-    });
-    localStorage.setItem(BG_STORAGE_KEY, JSON.stringify(selections));
+    const storageKey = getGameSettingsStorageKey();
+    if (!storageKey) return false;
+    const rawSettings = localStorage.getItem(storageKey);
+    if (!rawSettings) return false;
+    const settings = JSON.parse(rawSettings);
+    if (Number.isInteger(settings.selectedMapIndex) && MAPS[settings.selectedMapIndex]) selectedMapIndex = settings.selectedMapIndex;
+    if (Number.isInteger(settings.selectedThemeIndex) && THEMES[settings.selectedThemeIndex]) selectedThemeIndex = settings.selectedThemeIndex;
+    if (["circle", "square", "triangle"].includes(settings.obstacleShape)) obstacleShape = settings.obstacleShape;
+    if (Array.isArray(settings.obstacleColor)) obstacleColor = [...settings.obstacleColor];
+    if (timeOptions.includes(settings.selectedTime)) selectedTime = settings.selectedTime;
+    if (Number.isInteger(settings.selectedCarIndex) && CAR_MODELS[settings.selectedCarIndex]) selectedCarIndex = settings.selectedCarIndex;
+    selectedCar = CAR_MODELS[selectedCarIndex].id;
+    if (Array.isArray(settings.selectedColor)) selectedColor = [...settings.selectedColor];
+    if (Array.isArray(settings.selectedBoostColor)) selectedBoostColor = [...settings.selectedBoostColor];
+    if (Array.isArray(settings.themes)) {
+      settings.themes.forEach((savedTheme, index) => {
+        if (!THEMES[index]) return;
+        if (Array.isArray(savedTheme?.bg)) THEMES[index].bg = [...savedTheme.bg];
+        if (Array.isArray(savedTheme?.lineColor)) THEMES[index].lineColor = [...savedTheme.lineColor];
+      });
+    }
+    if (settings.backgrounds) {
+      Object.entries(BG_CATEGORIES).forEach(([key, category]) => {
+        const savedIndex = category.options.findIndex(([, , id]) => id === settings.backgrounds[key]);
+        if (savedIndex >= 0) category.selected = savedIndex;
+      });
+    }
+    obstacles = MAPS[selectedMapIndex].pos;
+    return true;
   } catch (_) {
-    // The current session still works without persistent browser storage.
+    return false;
   }
 }
 
-loadBackgroundSelections();
+loadGameSettings();
 
 function drawCurrentBg(category) {
   BG_CATEGORIES[category].options[BG_CATEGORIES[category].selected][1]();
@@ -1436,11 +1522,11 @@ function drawProfileScreen() {
   const passwordRect = centeredRect(WIDTH / 2, 300, 420, 52);
   buttons.profileUsername = usernameRect;
   buttons.profilePassword = passwordRect;
-  text("Email", usernameRect.x, usernameRect.y - 12, 22, BEIGE, "left", "bottom");
+  text("Account Name", usernameRect.x, usernameRect.y - 12, 22, BEIGE, "left", "bottom");
   text("Password", passwordRect.x, passwordRect.y - 12, 22, BEIGE, "left", "bottom");
   roundedRect(usernameRect, "rgb(28,28,34)", rgb(activeProfileField === "username" ? YELLOW : WHITE), activeProfileField === "username" ? 3 : 2, 8);
   roundedRect(passwordRect, "rgb(28,28,34)", rgb(activeProfileField === "password" ? YELLOW : WHITE), activeProfileField === "password" ? 3 : 2, 8);
-  text(profileUsername.slice(-28) || "Enter email", usernameRect.x + 16, usernameRect.y + usernameRect.h / 2, 24, profileUsername ? WHITE : [125, 125, 135], "left");
+  text(profileUsername.slice(-28) || "Enter account name", usernameRect.x + 16, usernameRect.y + usernameRect.h / 2, 24, profileUsername ? WHITE : [125, 125, 135], "left");
   const passwordLabel = profilePassword ? "•".repeat(Math.min(profilePassword.length, 28)) : "Enter password";
   text(passwordLabel, passwordRect.x + 16, passwordRect.y + passwordRect.h / 2, 24, profilePassword ? WHITE : [125, 125, 135], "left");
   drawButton("profileLogin", centeredRect(WIDTH / 2 - 115, 395, 210, 52), "Sign In", OBSTACLE_MID, 28);
@@ -1458,12 +1544,12 @@ function drawMenu() {
   roundedRect(startRect, rgb(KHAKI), rgb(WHITE), 3, 10);
   fitText("START", startRect, 72, WHITE, 10, 6, 4);
   text("Press Space to Start", WIDTH / 2, 184, 18, WHITE);
-  text("Choose your Time", WIDTH / 2, 250, 36, BEIGE);
+  text("Choose your Time", WIDTH / 2, 293, 36, BEIGE);
   const total = timeOptions.length * 60 + (timeOptions.length - 1) * 20;
   const startX = (WIDTH - total) / 2;
   for (let i = 0; i < timeOptions.length; i += 1) {
     const t = timeOptions[i];
-    const r = rect(startX + i * 80, 300, 60, 40);
+    const r = rect(startX + i * 80, 343, 60, 40);
     buttons.time.push([r, t]);
     roundedRect(r, rgb(t === selectedTime ? YELLOW : DARK_BROWN), null, 1, 5);
     fitText(t < 60 ? `${t}s` : "1m", r, 36, t === selectedTime ? DARK_BROWN : WHITE, 6, 4, 3);
@@ -1962,7 +2048,6 @@ canvas.addEventListener("pointerdown", (event) => {
     for (const [r, idx] of buttons.bgOptions || []) {
       if (hit(r, mx, my)) {
         BG_CATEGORIES[currentBgCategory].selected = idx;
-        saveBackgroundSelections();
       }
     }
     for (const [r, direction] of buttons.bgPageNav || []) {
@@ -2005,6 +2090,7 @@ canvas.addEventListener("pointerdown", (event) => {
     if (hit(buttons.back, mx, my)) state = "map_settings";
     for (const [r, col] of buttons.colors || []) if (hit(r, mx, my)) obstacleColor = col;
   }
+  saveGameSettings();
 });
 
 function handleProfileKey(event) {
