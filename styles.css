@@ -64,22 +64,8 @@ canvas {
     height: 100dvh;
     aspect-ratio: auto;
     overflow: hidden;
-    isolation: isolate;
-    background: #0b0d12;
-  }
-
-  html.mobile-device .game-shell::before {
-    content: "";
-    position: absolute;
-    z-index: 0;
-    inset: -24px;
-    background-image:
-      linear-gradient(rgba(8, 10, 14, 0.22), rgba(8, 10, 14, 0.22)),
-      var(--mobile-backdrop, radial-gradient(circle at 50% 20%, #252a36 0%, #11141b 52%, #08090c 100%));
-    background-position: center;
-    background-size: cover;
-    filter: blur(16px) saturate(0.9);
-    transform: scale(1.06);
+    background: var(--mobile-fill, #25272d);
+    transition: background-color 180ms ease-out;
   }
 
   html.mobile-device canvas {

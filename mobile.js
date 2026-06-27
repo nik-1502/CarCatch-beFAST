@@ -81,8 +81,46 @@ if (isMobile) {
 
   let previousState = "";
   let previousUserKey = "";
-  let lastBackdropUpdate = 0;
-  function syncMobileLayout(timestamp) {
+  function updatePageFill() {
+    try {
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let red = 0;
+      let green = 0;
+      let blue = 0;
+      let samples = 0;
+      const addPixel = (x, y) => {
+        const offset = (y * canvas.width + x) * 4;
+        if (pixels[offset + 3] < 20) return;
+        red += pixels[offset];
+        green += pixels[offset + 1];
+        blue += pixels[offset + 2];
+        samples += 1;
+      };
+      for (let x = 8; x < canvas.width - 8; x += 24) {
+        addPixel(x, 8);
+        addPixel(x, canvas.height - 9);
+      }
+      for (let y = 8; y < canvas.height - 8; y += 24) {
+        addPixel(8, y);
+        addPixel(canvas.width - 9, y);
+      }
+      if (!samples) return;
+      const darken = 0.72;
+      shell.style.setProperty(
+        "--mobile-fill",
+        `rgb(${Math.round(red / samples * darken)}, ${Math.round(green / samples * darken)}, ${Math.round(blue / samples * darken)})`,
+      );
+    } catch (_) {
+      shell.style.setProperty("--mobile-fill", "#25272d");
+    }
+  }
+
+  canvas.addEventListener("pointerup", () => {
+    window.setTimeout(updatePageFill, 80);
+  });
+
+  function syncMobileLayout() {
     const state = window.CarCatch?.getState() || "menu";
     const gameplay = state === "game" || state === "countdown";
     shell.classList.toggle("mobile-gameplay", gameplay);
@@ -95,14 +133,7 @@ if (isMobile) {
     if (showAuth && (previousState !== state || previousUserKey !== userKey)) renderAuthPanel(user);
     const status = authPanel.querySelector(".mobile-auth-status");
     if (status) status.textContent = window.CarCatch?.getProfileStatus() || "";
-    if (timestamp - lastBackdropUpdate > 750) {
-      try {
-        shell.style.setProperty("--mobile-backdrop", `url(${canvas.toDataURL("image/jpeg", 0.55)})`);
-      } catch (_) {
-        // The static gradient remains when canvas snapshots are unavailable.
-      }
-      lastBackdropUpdate = timestamp;
-    }
+    if (previousState !== state) requestAnimationFrame(() => requestAnimationFrame(updatePageFill));
     previousState = state;
     previousUserKey = userKey;
     requestAnimationFrame(syncMobileLayout);
