@@ -6,6 +6,7 @@ if (isMobile) {
   document.documentElement.classList.add("mobile-device");
 
   const shell = document.querySelector(".game-shell");
+  const canvas = document.getElementById("game");
   const joystick = document.querySelector(".joystick");
   const stick = document.querySelector(".joystick-stick");
   const authPanel = document.querySelector(".mobile-auth");
@@ -80,7 +81,8 @@ if (isMobile) {
 
   let previousState = "";
   let previousUserKey = "";
-  function syncMobileLayout() {
+  let lastBackdropUpdate = 0;
+  function syncMobileLayout(timestamp) {
     const state = window.CarCatch?.getState() || "menu";
     const gameplay = state === "game" || state === "countdown";
     shell.classList.toggle("mobile-gameplay", gameplay);
@@ -93,6 +95,14 @@ if (isMobile) {
     if (showAuth && (previousState !== state || previousUserKey !== userKey)) renderAuthPanel(user);
     const status = authPanel.querySelector(".mobile-auth-status");
     if (status) status.textContent = window.CarCatch?.getProfileStatus() || "";
+    if (timestamp - lastBackdropUpdate > 750) {
+      try {
+        shell.style.setProperty("--mobile-backdrop", `url(${canvas.toDataURL("image/jpeg", 0.55)})`);
+      } catch (_) {
+        // The static gradient remains when canvas snapshots are unavailable.
+      }
+      lastBackdropUpdate = timestamp;
+    }
     previousState = state;
     previousUserKey = userKey;
     requestAnimationFrame(syncMobileLayout);

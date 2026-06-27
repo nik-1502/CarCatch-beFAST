@@ -1419,7 +1419,7 @@ function drawSelectionTitle(label, fillColor, borderColor) {
 }
 
 function drawProfileIconButton() {
-  const size = MOBILE_DEVICE ? 74 : 54;
+  const size = 54;
   const button = rect(20, 20, size, size);
   buttons.profile = button;
   roundedRect(button, rgb(OBSTACLE_MID), null, 1, 10);
@@ -1434,8 +1434,8 @@ function drawProfileIconButton() {
 }
 
 function drawLeaderboardIconButton() {
-  const size = MOBILE_DEVICE ? 74 : 54;
-  const button = rect(20, MOBILE_DEVICE ? 104 : 84, size, size);
+  const size = 54;
+  const button = rect(20, 84, size, size);
   buttons.leaderboard = button;
   roundedRect(button, rgb(OBSTACLE_MID), null, 1, 10);
   const crown = [
@@ -1564,7 +1564,7 @@ function drawMenu() {
 }
 
 function drawBackButton() {
-  buttons.back = MOBILE_DEVICE ? rect(WIDTH - 170, 20, 150, 56) : rect(WIDTH - 120, 20, 100, 40);
+  buttons.back = rect(WIDTH - 120, 20, 100, 40);
   roundedRect(buttons.back, rgb(RELAXED_RED), null, 1, 8);
   fitText("Back", buttons.back, 28);
 }
@@ -1915,17 +1915,17 @@ function updateGame() {
     finishRound();
     return;
   }
-  const mobileThrottle = MOBILE_DEVICE && Math.abs(mobileInput.y) > 0.08 ? -mobileInput.y : 0;
-  if (mobileThrottle > 0) velocity = Math.min(maxSpeed, velocity + acceleration * mobileThrottle);
-  else if (mobileThrottle < 0) velocity = Math.max(-maxSpeed / 2, velocity + acceleration * mobileThrottle);
-  else if (keys.has("ArrowUp")) velocity = Math.min(maxSpeed, velocity + acceleration);
+  const mobileMagnitude = Math.hypot(mobileInput.x, mobileInput.y);
+  if (MOBILE_DEVICE && mobileMagnitude > 0.08) {
+    carAngle = Math.atan2(mobileInput.y, mobileInput.x) * 180 / Math.PI;
+    velocity = maxSpeed;
+  } else if (keys.has("ArrowUp")) velocity = Math.min(maxSpeed, velocity + acceleration);
   else if (keys.has("ArrowDown")) velocity = Math.max(-maxSpeed / 2, velocity - acceleration);
   else if (velocity > 0) velocity = Math.max(0, velocity - stopFriction);
   else if (velocity < 0) velocity = Math.min(0, velocity + stopFriction);
 
   const currentTurn = Math.abs(velocity) < 2 ? turnSpeed * 1.1 : turnSpeed;
-  if (MOBILE_DEVICE && Math.abs(mobileInput.x) > 0.08) carAngle += currentTurn * mobileInput.x;
-  else {
+  if (!(MOBILE_DEVICE && mobileMagnitude > 0.08)) {
     if (keys.has("ArrowLeft")) carAngle -= currentTurn;
     if (keys.has("ArrowRight")) carAngle += currentTurn;
   }
