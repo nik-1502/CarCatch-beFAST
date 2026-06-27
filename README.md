@@ -1,4 +1,4 @@
-# Top-Down Drifter Web-Version
+# CarCatch – Be Fast
 
 Diese Version läuft als statische Website mit HTML5 Canvas. Die ursprüngliche Python-Datei `cargame4.py` bleibt erhalten; die Browser-Version liegt in `index.html`, `styles.css` und `game.js`.
 
@@ -48,3 +48,13 @@ git add index.html styles.css game.js README.md
 git commit -m "Add browser version"
 git push
 ```
+
+## Supabase
+
+Die Browser-Version verwendet `@supabase/supabase-js` als ES-Modul. Deshalb muss das Spiel ueber einen lokalen Webserver oder GitHub Pages laufen; ein direktes Oeffnen per `file://` wird nicht unterstuetzt.
+
+1. Fuehre `migrations/001_auth_highscores.sql` einmal im Supabase SQL Editor aus.
+2. Stelle unter `Authentication` sicher, dass Email/Password aktiviert ist.
+3. URL und oeffentlicher Publishable Key liegen zentral in `config.js`.
+
+Supabase Auth speichert und erneuert die Sitzung automatisch. Highscores werden lokal zwischengespeichert und bei erreichbarem Supabase mit der Tabelle `highscores` synchronisiert. Der lokale Cache haelt das Spiel bei Netzwerkfehlern funktionsfaehig.

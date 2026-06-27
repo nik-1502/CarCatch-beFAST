@@ -1,5 +1,15 @@
 "use strict";
 
+import {
+  getSupabaseSession,
+  loadSupabaseHighscores,
+  onSupabaseAuthChange,
+  saveSupabaseHighscores,
+  signInWithSupabase,
+  signOutFromSupabase,
+  signUpWithSupabase,
+} from "./supabase.js";
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
@@ -142,6 +152,8 @@ const buttons = {};
 const USER_STORAGE_KEY = "carcatch-users";
 const SESSION_STORAGE_KEY = "carcatch-session";
 const GUEST_SCORES_STORAGE_KEY = "carcatch-guest-top-scores";
+const SUPABASE_USER_CACHE_KEY = "carcatch-supabase-user";
+const SUPABASE_SCORE_CACHE_PREFIX = "carcatch-supabase-scores:";
 
 const keys = new Set();
 
@@ -190,20 +202,30 @@ async function hashPassword(password, salt) {
 }
 
 function restoreUserSession() {
+  try {
+    const cachedSupabaseUser = JSON.parse(localStorage.getItem(SUPABASE_USER_CACHE_KEY) || "null");
+    if (cachedSupabaseUser?.id) {
+      currentUser = { key: cachedSupabaseUser.id, username: cachedSupabaseUser.username, email: cachedSupabaseUser.email, source: "supabase" };
+      profileUsername = cachedSupabaseUser.email || "";
+      return;
+    }
+  } catch (_) {
+    localStorage.removeItem(SUPABASE_USER_CACHE_KEY);
+  }
   const userKey = localStorage.getItem(SESSION_STORAGE_KEY);
   if (!userKey) return;
   const account = loadUserStore().users[userKey];
-  if (account) currentUser = { key: userKey, username: account.username };
+  if (account) currentUser = { key: userKey, username: account.username, source: "local" };
   else localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
 function getCurrentUserData() {
-  if (!currentUser) return null;
+  if (!currentUser || currentUser.source !== "local") return null;
   return loadUserStore().users[currentUser.key]?.data || null;
 }
 
 function updateCurrentUserData(update) {
-  if (!currentUser) return;
+  if (!currentUser || currentUser.source !== "local") return;
   const store = loadUserStore();
   const account = store.users[currentUser.key];
   if (!account) return;
@@ -211,7 +233,7 @@ function updateCurrentUserData(update) {
   saveUserStore(store);
 }
 
-async function submitProfile(action) {
+async function submitLocalProfile(action) {
   if (profileBusy) return;
   const userKey = normalizeUsername(profileUsername);
   if (userKey.length < 3) {
@@ -258,7 +280,7 @@ async function submitProfile(action) {
     }
 
     const account = loadUserStore().users[userKey];
-    currentUser = { key: userKey, username: account.username };
+    currentUser = { key: userKey, username: account.username, source: "local" };
     localStorage.setItem(SESSION_STORAGE_KEY, userKey);
     profilePassword = "";
     profileMessage = action === "create" ? "Account created and signed in." : "Signed in successfully.";
@@ -269,11 +291,72 @@ async function submitProfile(action) {
   }
 }
 
+function isNetworkFailure(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("fetch") || message.includes("network") || message.includes("import") || message.includes("load");
+}
+
+function cacheSupabaseUser(user) {
+  const cachedUser = {
+    id: user.id,
+    email: user.email || "",
+    username: user.user_metadata?.username || user.email?.split("@")[0] || "Player",
+  };
+  localStorage.setItem(SUPABASE_USER_CACHE_KEY, JSON.stringify(cachedUser));
+  currentUser = { key: cachedUser.id, username: cachedUser.username, email: cachedUser.email, source: "supabase" };
+  profileUsername = cachedUser.email;
+}
+
+async function submitProfile(action) {
+  if (profileBusy) return;
+  const email = profileUsername.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    profileMessage = "Please enter a valid email address.";
+    return;
+  }
+  if (profilePassword.length < 6) {
+    profileMessage = "Password must contain at least 6 characters.";
+    return;
+  }
+
+  profileBusy = true;
+  profileMessage = "Connecting to Supabase...";
+  try {
+    const username = email.split("@")[0];
+    const data = action === "create"
+      ? await signUpWithSupabase(email, profilePassword, username)
+      : await signInWithSupabase(email, profilePassword);
+    if (!data.session) {
+      profilePassword = "";
+      profileMessage = "Check your email to confirm the account.";
+      return;
+    }
+    cacheSupabaseUser(data.user);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    profilePassword = "";
+    profileMessage = action === "create" ? "Account created and signed in." : "Signed in successfully.";
+    void syncHighscoresWithSupabase();
+  } catch (error) {
+    if (!isNetworkFailure(error)) {
+      profileMessage = error?.message || "Supabase authentication failed.";
+      return;
+    }
+    profileBusy = false;
+    profileMessage = "Supabase offline - using local account storage.";
+    await submitLocalProfile(action);
+    return;
+  } finally {
+    profileBusy = false;
+  }
+}
+
 function logoutUser() {
+  if (currentUser?.source === "supabase") void signOutFromSupabase().catch(() => {});
   currentUser = null;
   profilePassword = "";
   profileMessage = "Signed out.";
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(SUPABASE_USER_CACHE_KEY);
 }
 
 function normalizeTopScores(scores) {
@@ -288,8 +371,89 @@ function normalizeTopScores(scores) {
   return normalized;
 }
 
+function getSupabaseScoreCacheKey(userId) {
+  return `${SUPABASE_SCORE_CACHE_PREFIX}${userId}`;
+}
+
+function readSupabaseScoreCache(userId) {
+  try {
+    return normalizeTopScores(JSON.parse(localStorage.getItem(getSupabaseScoreCacheKey(userId)) || "{}"));
+  } catch (_) {
+    return normalizeTopScores({});
+  }
+}
+
+function writeSupabaseScoreCache(userId, scores) {
+  localStorage.setItem(getSupabaseScoreCacheKey(userId), JSON.stringify(normalizeTopScores(scores)));
+}
+
+function rowsToTopScores(rows) {
+  const scores = normalizeTopScores({});
+  for (const row of rows) {
+    if (scores[row.duration]?.[row.layout] && Array.isArray(row.scores)) {
+      scores[row.duration][row.layout] = row.scores;
+    }
+  }
+  return normalizeTopScores(scores);
+}
+
+function mergeTopScores(first, second) {
+  const merged = normalizeTopScores({});
+  for (const duration of timeOptions) {
+    for (const map of MAPS) {
+      const firstCounts = new Map();
+      const secondCounts = new Map();
+      for (const scoreValue of first[duration][map.name]) firstCounts.set(scoreValue, (firstCounts.get(scoreValue) || 0) + 1);
+      for (const scoreValue of second[duration][map.name]) secondCounts.set(scoreValue, (secondCounts.get(scoreValue) || 0) + 1);
+      const values = [];
+      for (const scoreValue of new Set([...firstCounts.keys(), ...secondCounts.keys()])) {
+        const count = Math.max(firstCounts.get(scoreValue) || 0, secondCounts.get(scoreValue) || 0);
+        for (let index = 0; index < count; index += 1) values.push(scoreValue);
+      }
+      merged[duration][map.name] = values.sort((a, b) => b - a).slice(0, 3);
+    }
+  }
+  return merged;
+}
+
+async function syncHighscoresWithSupabase() {
+  if (!currentUser || currentUser.source !== "supabase") return;
+  const userId = currentUser.key;
+  try {
+    const localScores = readSupabaseScoreCache(userId);
+    const remoteScores = rowsToTopScores(await loadSupabaseHighscores(userId));
+    const mergedScores = mergeTopScores(localScores, remoteScores);
+    writeSupabaseScoreCache(userId, mergedScores);
+    await saveSupabaseHighscores(userId, mergedScores);
+  } catch (_) {
+    // Local scores remain authoritative until Supabase is reachable again.
+  }
+}
+
+async function initializeSupabaseIntegration() {
+  try {
+    const session = await getSupabaseSession();
+    if (session?.user) {
+      cacheSupabaseUser(session.user);
+      await syncHighscoresWithSupabase();
+    }
+    await onSupabaseAuthChange((event, nextSession) => {
+      if (nextSession?.user) {
+        cacheSupabaseUser(nextSession.user);
+        void syncHighscoresWithSupabase();
+      } else if (event === "SIGNED_OUT" && currentUser?.source === "supabase") {
+        currentUser = null;
+        localStorage.removeItem(SUPABASE_USER_CACHE_KEY);
+      }
+    });
+  } catch (_) {
+    // The cached/local account and all game features continue to work offline.
+  }
+}
+
 function loadTopScores() {
-  if (currentUser) return normalizeTopScores(getCurrentUserData()?.highscores);
+  if (currentUser?.source === "supabase") return readSupabaseScoreCache(currentUser.key);
+  if (currentUser?.source === "local") return normalizeTopScores(getCurrentUserData()?.highscores);
   try {
     return normalizeTopScores(JSON.parse(localStorage.getItem(GUEST_SCORES_STORAGE_KEY) || "{}"));
   } catch (_) {
@@ -299,8 +463,14 @@ function loadTopScores() {
 
 function saveTopScores(scores) {
   const normalized = normalizeTopScores(scores);
-  if (currentUser) updateCurrentUserData({ highscores: normalized });
-  else localStorage.setItem(GUEST_SCORES_STORAGE_KEY, JSON.stringify(normalized));
+  if (currentUser?.source === "supabase") {
+    writeSupabaseScoreCache(currentUser.key, normalized);
+    void saveSupabaseHighscores(currentUser.key, normalized).catch(() => {});
+  } else if (currentUser?.source === "local") {
+    updateCurrentUserData({ highscores: normalized });
+  } else {
+    localStorage.setItem(GUEST_SCORES_STORAGE_KEY, JSON.stringify(normalized));
+  }
 }
 
 function getScoreRank(newScore, topScores) {
@@ -335,6 +505,7 @@ function finishRound() {
 }
 
 restoreUserSession();
+void initializeSupabaseIntegration();
 
 function darken(c, factor) {
   return c.map((v) => Math.max(0, Math.trunc(v * factor)));
@@ -1265,11 +1436,11 @@ function drawProfileScreen() {
   const passwordRect = centeredRect(WIDTH / 2, 300, 420, 52);
   buttons.profileUsername = usernameRect;
   buttons.profilePassword = passwordRect;
-  text("Username", usernameRect.x, usernameRect.y - 12, 22, BEIGE, "left", "bottom");
+  text("Email", usernameRect.x, usernameRect.y - 12, 22, BEIGE, "left", "bottom");
   text("Password", passwordRect.x, passwordRect.y - 12, 22, BEIGE, "left", "bottom");
   roundedRect(usernameRect, "rgb(28,28,34)", rgb(activeProfileField === "username" ? YELLOW : WHITE), activeProfileField === "username" ? 3 : 2, 8);
   roundedRect(passwordRect, "rgb(28,28,34)", rgb(activeProfileField === "password" ? YELLOW : WHITE), activeProfileField === "password" ? 3 : 2, 8);
-  text(profileUsername.slice(-28) || "Enter username", usernameRect.x + 16, usernameRect.y + usernameRect.h / 2, 24, profileUsername ? WHITE : [125, 125, 135], "left");
+  text(profileUsername.slice(-28) || "Enter email", usernameRect.x + 16, usernameRect.y + usernameRect.h / 2, 24, profileUsername ? WHITE : [125, 125, 135], "left");
   const passwordLabel = profilePassword ? "•".repeat(Math.min(profilePassword.length, 28)) : "Enter password";
   text(passwordLabel, passwordRect.x + 16, passwordRect.y + passwordRect.h / 2, 24, profilePassword ? WHITE : [125, 125, 135], "left");
   drawButton("profileLogin", centeredRect(WIDTH / 2 - 115, 395, 210, 52), "Sign In", OBSTACLE_MID, 28);
