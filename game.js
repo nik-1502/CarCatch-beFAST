@@ -1453,11 +1453,12 @@ function drawMenu() {
   drawCurrentBg("menu");
   drawProfileIconButton();
   drawLeaderboardIconButton();
-  const startRect = centeredRect(WIDTH / 2, 150, 200, 60);
+  const startRect = centeredRect(WIDTH / 2, 138, 200, 60);
   buttons.start = startRect;
   roundedRect(startRect, rgb(KHAKI), rgb(WHITE), 3, 10);
   fitText("START", startRect, 72, WHITE, 10, 6, 4);
-  text("Wähle deine Zeit:", WIDTH / 2, 250, 36, BEIGE);
+  text("Press Space to Start", WIDTH / 2, 184, 18, WHITE);
+  text("Choose your Time", WIDTH / 2, 250, 36, BEIGE);
   const total = timeOptions.length * 60 + (timeOptions.length - 1) * 20;
   const startX = (WIDTH - total) / 2;
   for (let i = 0; i < timeOptions.length; i += 1) {
@@ -1467,10 +1468,8 @@ function drawMenu() {
     roundedRect(r, rgb(t === selectedTime ? YELLOW : DARK_BROWN), null, 1, 5);
     fitText(t < 60 ? `${t}s` : "1m", r, 36, t === selectedTime ? DARK_BROWN : WHITE, 6, 4, 3);
   }
-  drawButton("selectCar", centeredRect(WIDTH / 2 - 100, 420, 180, 50), "Car Settings", OBSTACLE_MID, 28);
-  drawButton("selectMap", centeredRect(WIDTH / 2 + 100, 420, 180, 50), "Map Settings", OBSTACLE_MID, 28);
-  drawButton("backgroundSettings", centeredRect(WIDTH / 2, 490, 380, 50), "Background Settings", OBSTACLE_MID, 28);
-  text("Press SPACE to start", WIDTH - 20, 60, 24, WHITE, "right", "top");
+  drawButton("selectCar", centeredRect(WIDTH / 2 - 100, 490, 180, 50), "Car Settings", OBSTACLE_MID, 28);
+  drawButton("selectMap", centeredRect(WIDTH / 2 + 100, 490, 180, 50), "Map Settings", OBSTACLE_MID, 28);
 }
 
 function drawBackButton() {
@@ -1912,7 +1911,6 @@ canvas.addEventListener("pointerdown", (event) => {
     for (const [r, t] of buttons.time || []) if (hit(r, mx, my)) selectedTime = t;
     if (hit(buttons.selectCar, mx, my)) state = "car_select";
     if (hit(buttons.selectMap, mx, my)) state = "map_settings";
-    if (hit(buttons.backgroundSettings, mx, my)) state = "background_categories";
   } else if (state === "leaderboard") {
     if (hit(buttons.back, mx, my)) state = "menu";
     for (const [timeButton, duration] of buttons.leaderboardTimes || []) {

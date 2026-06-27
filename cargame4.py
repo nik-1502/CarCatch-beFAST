@@ -954,20 +954,23 @@ font_tiny = pygame.font.SysFont(None, 24)
 
 
 def draw_menu():
-    global btn_start, time_buttons, btn_select_car, btn_select_map, btn_background_settings
+    global btn_start, time_buttons, btn_select_car, btn_select_map
 
     draw_current_bg("menu")
     
     # Start Button
-    btn_start.center = (WIDTH // 2, 150)
+    btn_start.center = (WIDTH // 2, 138)
     pygame.draw.rect(screen, KHAKI, btn_start, border_radius=10)
     pygame.draw.rect(screen, WHITE, btn_start, 3, border_radius=10)
     
     start_txt = font_big.render("START", True, WHITE)
     screen.blit(start_txt, start_txt.get_rect(center=btn_start.center))
 
+    start_hint = font_tiny.render("Press Space to Start", True, WHITE)
+    screen.blit(start_hint, start_hint.get_rect(center=(WIDTH // 2, 184)))
+
     # Zeit Auswahl Text
-    info = font_small.render("Wähle deine Zeit:", True, BEIGE)
+    info = font_small.render("Choose your Time", True, BEIGE)
     screen.blit(info, info.get_rect(center=(WIDTH // 2, 250)))
 
     # Zeit Buttons generieren und zeichnen
@@ -995,8 +998,8 @@ def draw_menu():
 
     # Buttons zentriert nebeneinander
     center_x = WIDTH // 2
-    btn_select_car.center = (center_x - 100, 420)
-    btn_select_map.center = (center_x + 100, 420)
+    btn_select_car.center = (center_x - 100, 490)
+    btn_select_map.center = (center_x + 100, 490)
 
     pygame.draw.rect(screen, OBSTACLE_MID, btn_select_car, border_radius=10)
     car_txt = font_small.render("Car Settings", True, WHITE)
@@ -1006,15 +1009,6 @@ def draw_menu():
     map_txt = font_small.render("Map Settings", True, WHITE)
     screen.blit(map_txt, map_txt.get_rect(center=btn_select_map.center))
 
-    btn_background_settings.center = (center_x, 490)
-    pygame.draw.rect(screen, OBSTACLE_MID, btn_background_settings, border_radius=10)
-    bg_txt = font_small.render("Background Settings", True, WHITE)
-    screen.blit(bg_txt, bg_txt.get_rect(center=btn_background_settings.center))
-
-    # Start hint
-    start_hint = font_tiny.render("Press SHIFT to start", True, WHITE)
-    start_hint = font_tiny.render("Press SPACE to start", True, WHITE)
-    screen.blit(start_hint, start_hint.get_rect(topright=(WIDTH - 20, 60)))
 
 def draw_car_select():
     global btn_back, car_select_rects, selected_car, btn_car_color_select, btn_boost_color_select
@@ -1439,9 +1433,6 @@ while running:
                 if btn_select_map.collidepoint(mx, my):
                     state = "map_settings"
             
-                if btn_background_settings.collidepoint(mx, my):
-                    state = "background_categories"
-
             elif state == "scoreboard":
                 # Buttons werden in draw_scoreboard definiert, wir berechnen sie hier analog
                 btn_replay = pygame.Rect(50, HEIGHT - 80, 200, 50)
