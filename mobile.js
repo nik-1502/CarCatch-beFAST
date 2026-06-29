@@ -12,6 +12,24 @@ if (isMobile) {
   const authPanel = document.querySelector(".mobile-auth");
   let activePointer = null;
 
+  // Keep native two-finger zoom, while `touch-action: manipulation` removes
+  // the browser's double-tap zoom gesture on mobile.
+  let viewportResetFrame = 0;
+  function restoreUnzoomedViewport() {
+    if (!window.visualViewport || window.visualViewport.scale > 1.01) return;
+    cancelAnimationFrame(viewportResetFrame);
+    viewportResetFrame = requestAnimationFrame(() => {
+      window.scrollTo(0, 0);
+      // Reading the bounds after the viewport settles forces layout-dependent
+      // canvas coordinates to use the normal, unzoomed geometry immediately.
+      shell.getBoundingClientRect();
+    });
+  }
+
+  window.visualViewport?.addEventListener("resize", restoreUnzoomedViewport);
+  window.visualViewport?.addEventListener("scroll", restoreUnzoomedViewport);
+  window.addEventListener("orientationchange", restoreUnzoomedViewport);
+
   function updateJoystick(clientX, clientY) {
     const bounds = joystick.getBoundingClientRect();
     const centerX = bounds.left + bounds.width / 2;
@@ -77,6 +95,13 @@ if (isMobile) {
       window.CarCatch?.setProfileCredentials(account, password);
       window.CarCatch?.submitProfile(action);
     }
+  });
+
+  authPanel.addEventListener("input", (event) => {
+    if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) return;
+    const account = authPanel.querySelector('[name="account"]')?.value || "";
+    const password = authPanel.querySelector('[name="password"]')?.value || "";
+    window.CarCatch?.setProfileCredentials(account, password);
   });
 
   let previousState = "";

@@ -2131,6 +2131,10 @@ function handleProfileKey(event) {
 }
 
 window.addEventListener("keydown", (event) => {
+  const editableTarget = event.target instanceof Element
+    && event.target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false'])");
+  if (MOBILE_DEVICE && editableTarget) return;
+
   if (state === "profile") {
     event.preventDefault();
     handleProfileKey(event);
