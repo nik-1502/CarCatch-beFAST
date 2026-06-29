@@ -1056,7 +1056,7 @@ function loadGameSettings(preserveBackgrounds = false) {
 
 loadGameSettings();
 
-function updateMobileBackground() {
+function updateMobileBackground(category) {
   if (!MOBILE_DEVICE || state === "game" || state === "countdown") return;
   const backdrop = document.getElementById("mobile-background");
   if (!(backdrop instanceof HTMLCanvasElement)) return;
@@ -1071,34 +1071,302 @@ function updateMobileBackground() {
     backdrop.height = targetHeight;
   }
 
-  const backdropContext = backdrop.getContext("2d");
-  const scale = Math.min(targetWidth / WIDTH, targetHeight / HEIGHT);
-  const tileWidth = WIDTH * scale;
-  const tileHeight = HEIGHT * scale;
-  const centerLeft = (targetWidth - tileWidth) / 2;
-  const centerTop = (targetHeight - tileHeight) / 2;
-  const firstColumn = Math.floor(-centerLeft / tileWidth);
-  const lastColumn = Math.ceil((targetWidth - centerLeft) / tileWidth);
-  const firstRow = Math.floor(-centerTop / tileHeight);
-  const lastRow = Math.ceil((targetHeight - centerTop) / tileHeight);
+  const g = backdrop.getContext("2d");
+  const w = bounds.width;
+  const h = bounds.height;
+  const t = bgTick * 0.001;
+  const backgroundId = BG_CATEGORIES[category].options[BG_CATEGORIES[category].selected][2];
+  const seeded = (index, salt = 0) => {
+    const value = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
+    return value - Math.floor(value);
+  };
+  const wrap = (value, limit) => ((value % limit) + limit) % limit;
+  const pathLine = (x1, y1, x2, y2, color, width = 1) => {
+    g.beginPath();
+    g.moveTo(x1, y1);
+    g.lineTo(x2, y2);
+    g.strokeStyle = color;
+    g.lineWidth = width;
+    g.stroke();
+  };
+  const dot = (x, y, radius, color, stroke = false) => {
+    g.beginPath();
+    g.arc(x, y, Math.max(0, radius), 0, Math.PI * 2);
+    if (stroke) {
+      g.strokeStyle = color;
+      g.stroke();
+    } else {
+      g.fillStyle = color;
+      g.fill();
+    }
+  };
 
-  backdropContext.clearRect(0, 0, targetWidth, targetHeight);
-  for (let row = firstRow; row < lastRow; row += 1) {
-    for (let column = firstColumn; column < lastColumn; column += 1) {
-      const left = centerLeft + column * tileWidth;
-      const top = centerTop + row * tileHeight;
-      backdropContext.save();
-      backdropContext.translate(left + (column % 2 ? tileWidth : 0), top + (row % 2 ? tileHeight : 0));
-      backdropContext.scale(column % 2 ? -1 : 1, row % 2 ? -1 : 1);
-      backdropContext.drawImage(canvas, 0, 0, WIDTH, HEIGHT, 0, 0, tileWidth, tileHeight);
-      backdropContext.restore();
+  g.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  if (backgroundId === "menu_particles") {
+    g.fillStyle = "rgb(20,20,25)";
+    g.fillRect(0, 0, w, h);
+    const colors = ["rgb(50,50,80)", "rgb(80,50,50)", "rgb(50,80,50)"];
+    for (let i = 0; i < 150; i += 1) {
+      const x = wrap(seeded(i, 1) * w + (seeded(i, 3) - 0.5) * t * 18, w);
+      const y = wrap(seeded(i, 2) * h + (seeded(i, 4) - 0.5) * t * 18, h);
+      dot(x, y, 1.2 + seeded(i, 5) * 2, colors[i % colors.length]);
+    }
+  } else if (backgroundId === "menu_neon") {
+    const horizon = h * 0.36;
+    g.fillStyle = "rgb(10,0,20)";
+    g.fillRect(0, 0, w, h);
+    const sun = g.createRadialGradient(w / 2, horizon - 55, 4, w / 2, horizon - 55, Math.min(w * 0.2, 80));
+    sun.addColorStop(0, "rgb(255,220,80)");
+    sun.addColorStop(0.55, "rgb(255,95,30)");
+    sun.addColorStop(1, "rgba(255,40,120,0)");
+    g.fillStyle = sun;
+    g.fillRect(0, 0, w, horizon);
+    pathLine(0, horizon, w, horizon, "rgb(220,0,220)", 2);
+    for (let i = -8; i <= 8; i += 1) pathLine(w / 2, horizon, w / 2 + i * w * 0.22, h, "rgba(200,0,200,0.55)");
+    for (let i = 0; i < 16; i += 1) {
+      const progress = wrap(i / 16 + t * 0.08, 1);
+      const y = horizon + (h - horizon) * progress * progress;
+      pathLine(0, y, w, y, "rgba(200,0,200,0.55)");
+    }
+  } else if (backgroundId === "menu_traffic") {
+    g.fillStyle = "rgb(30,30,30)";
+    g.fillRect(0, 0, w, h);
+    for (let lane = 1; lane < 6; lane += 1) pathLine(0, h * lane / 6, w, h * lane / 6, "rgba(210,210,190,0.12)", 2);
+    for (let i = 0; i < 12; i += 1) {
+      const speed = 24 + seeded(i, 4) * 45;
+      const x = wrap(seeded(i, 1) * (w + 80) + t * speed, w + 80) - 50;
+      const y = h * (0.08 + (i % 6) / 6) + 12;
+      g.fillStyle = `hsl(${Math.floor(seeded(i, 2) * 360)} 58% 55%)`;
+      g.fillRect(x, y, 42, 20);
+      g.fillStyle = "rgb(255,255,205)";
+      g.fillRect(x + 40, y + 3, 8, 4);
+      g.fillRect(x + 40, y + 13, 8, 4);
+    }
+  } else if (backgroundId === "menu_stars") {
+    g.fillStyle = "rgb(5,5,10)";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 190; i += 1) {
+      const speed = 3 + seeded(i, 3) * 16;
+      const x = wrap(seeded(i, 1) * w - t * speed, w);
+      const brightness = Math.floor(145 + seeded(i, 4) * 110);
+      dot(x, seeded(i, 2) * h, 0.6 + seeded(i, 5) * 1.5, `rgb(${brightness},${brightness},${brightness})`);
+    }
+  } else if (backgroundId === "menu_rain") {
+    g.fillStyle = "rgb(10,15,20)";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 170; i += 1) {
+      const speed = 90 + seeded(i, 3) * 180;
+      const y = wrap(seeded(i, 2) * h + t * speed, h + 25) - 20;
+      pathLine(seeded(i, 1) * w, y, seeded(i, 1) * w - 4, y + 16, "rgba(120,150,185,0.62)");
+    }
+  } else if (backgroundId === "garage_blueprint") {
+    g.fillStyle = "rgb(0,50,100)";
+    g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 25) pathLine(x, 0, x, h, x % 100 ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.2)");
+    for (let y = 0; y < h; y += 25) pathLine(0, y, w, y, y % 100 ? "rgba(255,255,255,0.09)" : "rgba(255,255,255,0.2)");
+    const radius = Math.min(w * 0.34, 150);
+    g.lineWidth = 2;
+    dot(w / 2, h / 2, radius, "rgba(255,255,255,0.65)", true);
+    dot(w / 2, h / 2, radius * 0.62, "rgba(255,255,255,0.28)", true);
+    pathLine(w / 2 - radius - 18, h / 2, w / 2 + radius + 18, h / 2, "rgba(255,255,255,0.5)");
+    pathLine(w / 2, h / 2 - radius - 18, w / 2, h / 2 + radius + 18, "rgba(255,255,255,0.5)");
+  } else if (backgroundId === "garage_spotlights") {
+    g.fillStyle = "rgb(20,20,20)";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 3; i += 1) {
+      const sourceX = w * (0.2 + i * 0.3) + Math.sin(t + i * 2) * w * 0.18;
+      const gradient = g.createLinearGradient(sourceX, 0, w / 2, h);
+      gradient.addColorStop(0, i % 2 ? "rgba(200,210,255,0.25)" : "rgba(255,245,200,0.25)");
+      gradient.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = gradient;
+      g.beginPath();
+      g.moveTo(sourceX - 8, 0);
+      g.lineTo(w * 0.18 + i * w * 0.2, h);
+      g.lineTo(w * 0.52 + i * w * 0.12, h);
+      g.closePath();
+      g.fill();
+    }
+  } else if (backgroundId === "garage_hex") {
+    g.fillStyle = "rgb(30,30,35)";
+    g.fillRect(0, 0, w, h);
+    const size = 26;
+    for (let y = -size; y < h + size; y += 46) {
+      for (let x = -size; x < w + size; x += 54) {
+        const cx = x + (Math.floor(y / 46) % 2 ? 27 : 0);
+        const shade = 42 + Math.floor(Math.sin(cx * 0.02 + y * 0.015 + t * 2) * 18);
+        g.beginPath();
+        for (let side = 0; side < 6; side += 1) {
+          const angle = Math.PI / 3 * side;
+          const px = cx + Math.cos(angle) * size;
+          const py = y + Math.sin(angle) * size;
+          if (!side) g.moveTo(px, py); else g.lineTo(px, py);
+        }
+        g.closePath();
+        g.strokeStyle = `rgb(${shade},${shade},${shade + 10})`;
+        g.lineWidth = 2;
+        g.stroke();
+      }
+    }
+  } else if (backgroundId === "garage_smoke") {
+    g.fillStyle = "rgb(10,10,10)";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 45; i += 1) {
+      const y = h - wrap(t * (12 + seeded(i, 3) * 24) + seeded(i, 2) * (h + 160), h + 160) + 80;
+      const x = seeded(i, 1) * w + Math.sin(t * 0.5 + i) * 18;
+      const radius = 28 + seeded(i, 4) * 65;
+      const smoke = g.createRadialGradient(x, y, 0, x, y, radius);
+      smoke.addColorStop(0, "rgba(90,90,95,0.09)");
+      smoke.addColorStop(1, "rgba(40,40,45,0)");
+      g.fillStyle = smoke;
+      g.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
+  } else if (backgroundId === "garage_scanner") {
+    g.fillStyle = "rgb(0,20,0)";
+    g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 32) pathLine(x, 0, x, h, "rgba(0,80,25,0.5)");
+    for (let y = 0; y < h; y += 32) pathLine(0, y, w, y, "rgba(0,55,20,0.25)");
+    const scanY = wrap(t * 110, h + 80) - 40;
+    const scan = g.createLinearGradient(0, scanY - 35, 0, scanY + 35);
+    scan.addColorStop(0, "rgba(0,255,70,0)");
+    scan.addColorStop(0.5, "rgba(0,255,70,0.28)");
+    scan.addColorStop(1, "rgba(0,255,70,0)");
+    g.fillStyle = scan;
+    g.fillRect(0, scanY - 35, w, 70);
+    pathLine(0, scanY, w, scanY, "rgb(0,255,70)", 2);
+  } else if (backgroundId === "map_radar") {
+    g.fillStyle = "rgb(0,20,10)";
+    g.fillRect(0, 0, w, h);
+    const radius = Math.min(w * 0.43, 190);
+    for (let y = radius; y < h + radius; y += radius * 2.35) {
+      g.lineWidth = 1.5;
+      dot(w / 2, y, radius, "rgba(0,115,55,0.7)", true);
+      dot(w / 2, y, radius / 2, "rgba(0,115,55,0.5)", true);
+      pathLine(w / 2 - radius, y, w / 2 + radius, y, "rgba(0,115,55,0.5)");
+      pathLine(w / 2, y - radius, w / 2, y + radius, "rgba(0,115,55,0.5)");
+      const angle = t * 1.7;
+      pathLine(w / 2, y, w / 2 + Math.cos(angle) * radius, y + Math.sin(angle) * radius, "rgb(0,255,80)", 2);
+    }
+  } else if (backgroundId === "map_digital") {
+    g.fillStyle = "rgb(10,10,15)";
+    g.fillRect(0, 0, w, h);
+    g.font = "700 20px monospace";
+    g.textAlign = "center";
+    for (let y = 15; y < h; y += 25) for (let x = 14; x < w; x += 25) {
+      const on = seeded(x + Math.floor(t * 4), y) > 0.76;
+      g.fillStyle = on ? "rgb(0,115,35)" : "rgb(0,48,20)";
+      g.fillText(seeded(x, y + Math.floor(t * 3)) > 0.5 ? "1" : "0", x, y);
+    }
+  } else if (backgroundId === "map_topography") {
+    g.fillStyle = "rgb(30,30,30)";
+    g.fillRect(0, 0, w, h);
+    g.strokeStyle = "rgba(135,135,135,0.7)";
+    g.lineWidth = 1.5;
+    for (let band = -2; band < Math.ceil(h / 65) + 2; band += 1) {
+      g.beginPath();
+      for (let x = -10; x <= w + 10; x += 10) {
+        const y = band * 65 + 45 + Math.sin(x * 0.025 + t + band) * 23 + Math.sin(x * 0.009 - t) * 14;
+        if (x === -10) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+  } else if (backgroundId === "map_grid_waves") {
+    g.fillStyle = "rgb(20,0,20)";
+    g.fillRect(0, 0, w, h);
+    for (let y = 0; y < h + 30; y += 32) for (let x = 0; x < w + 30; x += 32) {
+      dot(x + Math.sin(y * 0.025 + t * 2) * 9, y + Math.cos(x * 0.025 + t * 2) * 9, 2, "rgb(75,15,85)");
+    }
+  } else if (backgroundId === "map_static") {
+    g.fillStyle = "rgb(40,40,40)";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < Math.floor(w * h / 550); i += 1) {
+      const frame = Math.floor(t * 12);
+      const shade = 40 + Math.floor(seeded(i, frame) * 28);
+      g.fillStyle = `rgb(${shade},${shade},${shade})`;
+      g.fillRect(seeded(i, frame + 1) * w, seeded(i, frame + 2) * h, 1.5, 1.5);
+    }
+  } else if (backgroundId === "score_confetti") {
+    g.fillStyle = "rgb(20,20,25)";
+    g.fillRect(0, 0, w, h);
+    const colors = ["#e63c3c", "#ffdc5a", "#00ffff", "#56d75b"];
+    for (let i = 0; i < 150; i += 1) {
+      const y = wrap(seeded(i, 2) * h + t * (35 + seeded(i, 4) * 80), h + 15) - 10;
+      const x = wrap(seeded(i, 1) * w + Math.sin(t + i) * 12, w);
+      g.save();
+      g.translate(x, y);
+      g.rotate(t * (seeded(i, 5) - 0.5) * 3);
+      g.fillStyle = colors[i % colors.length];
+      g.fillRect(-3, -5, 6, 10);
+      g.restore();
+    }
+  } else if (backgroundId === "score_fireworks") {
+    g.fillStyle = "rgb(10,10,20)";
+    g.fillRect(0, 0, w, h);
+    const colors = ["#e63c3c", "#ffdc5a", "#00ffff", "#bf62ff"];
+    for (let burst = 0; burst < 7; burst += 1) {
+      const phase = wrap(t * 0.32 + seeded(burst, 4), 1);
+      const cx = w * (0.12 + seeded(burst, 1) * 0.76);
+      const cy = h * (0.08 + seeded(burst, 2) * 0.82);
+      g.strokeStyle = colors[burst % colors.length];
+      g.globalAlpha = Math.sin(phase * Math.PI);
+      for (let ray = 0; ray < 18; ray += 1) {
+        const angle = ray / 18 * Math.PI * 2;
+        const inner = phase * 18;
+        const outer = phase * (45 + seeded(burst, 3) * 75);
+        pathLine(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner, cx + Math.cos(angle) * outer, cy + Math.sin(angle) * outer, colors[burst % colors.length], 1.5);
+      }
+      g.globalAlpha = 1;
+    }
+  } else if (backgroundId === "score_gold") {
+    const gold = g.createLinearGradient(0, 0, 0, h);
+    gold.addColorStop(0, "rgb(58,45,0)");
+    gold.addColorStop(0.5, "rgb(32,25,0)");
+    gold.addColorStop(1, "rgb(58,45,0)");
+    g.fillStyle = gold;
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 100; i += 1) {
+      const y = wrap(seeded(i, 2) * h - t * (10 + seeded(i, 3) * 24), h);
+      const brightness = 150 + Math.floor(seeded(i, 4) * 105);
+      dot(seeded(i, 1) * w, y, 1 + seeded(i, 5) * 2.5, `rgb(${brightness},${brightness},20)`);
+    }
+  } else if (backgroundId === "score_matrix") {
+    g.fillStyle = "black";
+    g.fillRect(0, 0, w, h);
+    g.font = "700 18px monospace";
+    g.textAlign = "center";
+    for (let column = 0; column < Math.ceil(w / 20); column += 1) {
+      const head = wrap(seeded(column, 1) * h + t * (45 + seeded(column, 2) * 65), h + 150) - 50;
+      for (let trail = 0; trail < 9; trail += 1) {
+        const y = head - trail * 19;
+        g.fillStyle = trail === 0 ? "rgb(190,255,205)" : `rgba(0,${235 - trail * 20},55,${1 - trail / 10})`;
+        g.fillText(String.fromCharCode(33 + Math.floor(seeded(column + trail, Math.floor(t * 7)) * 93)), column * 20 + 10, y);
+      }
+    }
+  } else {
+    g.fillStyle = "rgb(20,20,30)";
+    g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5; i += 1) {
+      const sourceX = w * (i + 1) / 6;
+      const endX = w / 2 + Math.sin(t * 1.4 + i) * w * 0.65;
+      const beam = g.createLinearGradient(sourceX, h, endX, 0);
+      beam.addColorStop(0, "rgba(255,255,255,0.16)");
+      beam.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = beam;
+      g.beginPath();
+      g.moveTo(sourceX - 8, h);
+      g.lineTo(endX - 25, 0);
+      g.lineTo(endX + 25, 0);
+      g.lineTo(sourceX + 8, h);
+      g.closePath();
+      g.fill();
     }
   }
 }
 
 function drawCurrentBg(category) {
   BG_CATEGORIES[category].options[BG_CATEGORIES[category].selected][1]();
-  updateMobileBackground();
+  updateMobileBackground(category);
 }
 
 function drawThemeStructure(theme) {
