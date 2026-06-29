@@ -1365,8 +1365,11 @@ function updateMobileBackground(category) {
 }
 
 function drawCurrentBg(category) {
+  if (MOBILE_DEVICE && document.getElementById("mobile-background") instanceof HTMLCanvasElement) {
+    updateMobileBackground(category);
+    return;
+  }
   BG_CATEGORIES[category].options[BG_CATEGORIES[category].selected][1]();
-  updateMobileBackground(category);
 }
 
 function drawThemeStructure(theme) {

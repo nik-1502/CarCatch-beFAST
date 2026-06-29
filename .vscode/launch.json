@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "CarCatch: Local Preview (Edge)",
+      "type": "pwa-msedge",
+      "request": "launch",
+      "url": "http://127.0.0.1:8000/index.html",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "CarCatch: Start local server",
+      "runtimeArgs": [
+        "--new-window"
+      ],
+      "presentation": {
+        "group": "CarCatch",
+        "order": 1
+      }
+    },
+    {
+      "name": "CarCatch: Local Preview (Chrome)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://127.0.0.1:8000/index.html",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "CarCatch: Start local server",
+      "runtimeArgs": [
+        "--new-window"
+      ],
+      "presentation": {
+        "group": "CarCatch",
+        "order": 2
+      }
+    }
+  ]
+}

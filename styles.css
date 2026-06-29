@@ -93,6 +93,11 @@ canvas {
     pointer-events: none;
   }
 
+  html.mobile-device .game-shell:not(.mobile-gameplay) #game {
+    background: transparent;
+    box-shadow: none;
+  }
+
   html.mobile-device .mobile-gameplay .mobile-background {
     display: none;
   }
