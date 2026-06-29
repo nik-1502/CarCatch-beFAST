@@ -7,6 +7,11 @@ if (isMobile) {
 
   const shell = document.querySelector(".game-shell");
   const canvas = document.getElementById("game");
+  const backdrop = document.createElement("canvas");
+  backdrop.id = "mobile-background";
+  backdrop.className = "mobile-background";
+  backdrop.setAttribute("aria-hidden", "true");
+  shell.prepend(backdrop);
   const joystick = document.querySelector(".joystick");
   const stick = document.querySelector(".joystick-stick");
   const authPanel = document.querySelector(".mobile-auth");

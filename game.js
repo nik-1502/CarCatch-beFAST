@@ -1056,8 +1056,49 @@ function loadGameSettings(preserveBackgrounds = false) {
 
 loadGameSettings();
 
+function updateMobileBackground() {
+  if (!MOBILE_DEVICE || state === "game" || state === "countdown") return;
+  const backdrop = document.getElementById("mobile-background");
+  if (!(backdrop instanceof HTMLCanvasElement)) return;
+
+  const bounds = backdrop.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const targetWidth = Math.max(1, Math.round(bounds.width * pixelRatio));
+  const targetHeight = Math.max(1, Math.round(bounds.height * pixelRatio));
+  if (backdrop.width !== targetWidth || backdrop.height !== targetHeight) {
+    backdrop.width = targetWidth;
+    backdrop.height = targetHeight;
+  }
+
+  const backdropContext = backdrop.getContext("2d");
+  const scale = Math.min(targetWidth / WIDTH, targetHeight / HEIGHT);
+  const tileWidth = WIDTH * scale;
+  const tileHeight = HEIGHT * scale;
+  const centerLeft = (targetWidth - tileWidth) / 2;
+  const centerTop = (targetHeight - tileHeight) / 2;
+  const firstColumn = Math.floor(-centerLeft / tileWidth);
+  const lastColumn = Math.ceil((targetWidth - centerLeft) / tileWidth);
+  const firstRow = Math.floor(-centerTop / tileHeight);
+  const lastRow = Math.ceil((targetHeight - centerTop) / tileHeight);
+
+  backdropContext.clearRect(0, 0, targetWidth, targetHeight);
+  for (let row = firstRow; row < lastRow; row += 1) {
+    for (let column = firstColumn; column < lastColumn; column += 1) {
+      const left = centerLeft + column * tileWidth;
+      const top = centerTop + row * tileHeight;
+      backdropContext.save();
+      backdropContext.translate(left + (column % 2 ? tileWidth : 0), top + (row % 2 ? tileHeight : 0));
+      backdropContext.scale(column % 2 ? -1 : 1, row % 2 ? -1 : 1);
+      backdropContext.drawImage(canvas, 0, 0, WIDTH, HEIGHT, 0, 0, tileWidth, tileHeight);
+      backdropContext.restore();
+    }
+  }
+}
+
 function drawCurrentBg(category) {
   BG_CATEGORIES[category].options[BG_CATEGORIES[category].selected][1]();
+  updateMobileBackground();
 }
 
 function drawThemeStructure(theme) {
