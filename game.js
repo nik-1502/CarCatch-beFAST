@@ -129,6 +129,7 @@ let state = "menu";
 let currentBgCategory = "menu";
 let collectiblePos = v(400, 300);
 let lastFrame = performance.now();
+let physicsAccumulator = 0;
 let bgTick = 0;
 let countdownStartTime = 0;
 let currentUser = null;
@@ -1713,6 +1714,7 @@ function startGame() {
   score = 0;
   collectiblePos = spawnCollectible();
   flameParticles.length = 0;
+  physicsAccumulator = 0;
   countdownStartTime = performance.now();
   state = "countdown";
 }
@@ -2521,7 +2523,7 @@ function drawCountdown() {
 }
 
 function drawFrame(now) {
-  const dt = Math.min(50, now - lastFrame);
+  const dt = Math.min(100, Math.max(0, now - lastFrame));
   lastFrame = now;
   bgTick += dt;
   const renderScale = Math.max(1, canvas.width / WIDTH);
@@ -2545,7 +2547,15 @@ function drawFrame(now) {
   else if (state === "scoreboard") drawScoreboard();
   else if (state === "countdown") drawCountdown();
   else {
-    updateGame();
+    // Keep gameplay at the original 60 Hz simulation rate independently of
+    // the display refresh rate. Previously, a 30 FPS phone moved at half the
+    // speed of a 60 FPS phone and fluctuating frame rates made steering shake.
+    const physicsStep = 1000 / FPS;
+    physicsAccumulator = Math.min(physicsAccumulator + dt, physicsStep * 6);
+    while (physicsAccumulator >= physicsStep && state === "game") {
+      updateGame();
+      physicsAccumulator -= physicsStep;
+    }
     drawGameplayScene();
   }
   requestAnimationFrame(drawFrame);

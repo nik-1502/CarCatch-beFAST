@@ -27,6 +27,9 @@ if (isMobile) {
   const stick = document.querySelector(".joystick-stick");
   const authPanel = document.querySelector(".mobile-auth");
   let activePointer = null;
+  let joystickBounds = null;
+  let joystickFrame = 0;
+  let pendingJoystickPoint = null;
   let canvasLayoutMode = "";
 
   // Keep native two-finger zoom, while `touch-action: manipulation` removes
@@ -52,7 +55,7 @@ if (isMobile) {
   });
 
   function updateJoystick(clientX, clientY) {
-    const bounds = joystick.getBoundingClientRect();
+    const bounds = joystickBounds || joystick.getBoundingClientRect();
     const centerX = bounds.left + bounds.width / 2;
     const centerY = bounds.top + bounds.height / 2;
     const maxDistance = bounds.width * 0.31;
@@ -67,7 +70,11 @@ if (isMobile) {
   }
 
   function releaseJoystick() {
+    cancelAnimationFrame(joystickFrame);
+    joystickFrame = 0;
+    pendingJoystickPoint = null;
     activePointer = null;
+    joystickBounds = null;
     stick.style.transform = "translate(0, 0)";
     window.CarCatch?.setMobileInput(0, 0);
   }
@@ -94,15 +101,29 @@ if (isMobile) {
   }
 
   joystick.addEventListener("pointerdown", (event) => {
+    if (activePointer !== null) return;
     activePointer = event.pointerId;
     joystick.setPointerCapture(event.pointerId);
+    joystickBounds = joystick.getBoundingClientRect();
     updateJoystick(event.clientX, event.clientY);
   });
   joystick.addEventListener("pointermove", (event) => {
-    if (event.pointerId === activePointer) updateJoystick(event.clientX, event.clientY);
+    if (event.pointerId !== activePointer) return;
+    pendingJoystickPoint = { x: event.clientX, y: event.clientY };
+    if (joystickFrame) return;
+    joystickFrame = requestAnimationFrame(() => {
+      joystickFrame = 0;
+      if (!pendingJoystickPoint) return;
+      updateJoystick(pendingJoystickPoint.x, pendingJoystickPoint.y);
+      pendingJoystickPoint = null;
+    });
   });
-  joystick.addEventListener("pointerup", releaseJoystick);
-  joystick.addEventListener("pointercancel", releaseJoystick);
+  joystick.addEventListener("pointerup", (event) => {
+    if (event.pointerId === activePointer) releaseJoystick();
+  });
+  joystick.addEventListener("pointercancel", (event) => {
+    if (event.pointerId === activePointer) releaseJoystick();
+  });
 
   function renderAuthPanel(user) {
     if (user) {
@@ -182,8 +203,9 @@ if (isMobile) {
       const logicalCanvasHeight = gameplay
         ? 600
         : Math.max(600, Math.round(800 * shell.clientHeight / Math.max(1, shell.clientWidth)));
-      const deviceScale = Math.min(window.devicePixelRatio || 1, 2.5);
-      const renderScale = Math.max(1, Math.min(2, shell.clientWidth * deviceScale / 800));
+      const deviceScale = Math.min(window.devicePixelRatio || 1, 2);
+      const maxRenderScale = gameplay ? 1.25 : 1.5;
+      const renderScale = Math.max(1, Math.min(maxRenderScale, shell.clientWidth * deviceScale / 800));
       const desiredCanvasWidth = Math.round(800 * renderScale);
       const desiredCanvasHeight = Math.round(logicalCanvasHeight * renderScale);
       canvas.dataset.logicalHeight = String(logicalCanvasHeight);
