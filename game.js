@@ -16,6 +16,7 @@ const MOBILE_DEVICE = (navigator.maxTouchPoints > 0
   && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1024px)").matches))
   || window.matchMedia("(max-width: 700px)").matches
   || window.matchMedia("(max-width: 1024px) and (orientation: portrait)").matches;
+const MOBILE_PORTRAIT_LAYOUT = MOBILE_DEVICE && window.matchMedia("(orientation: portrait)").matches;
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -164,6 +165,7 @@ const SESSION_STORAGE_KEY = "carcatch-session";
 const SUPABASE_USER_CACHE_KEY = "carcatch-supabase-user";
 const SUPABASE_SCORE_CACHE_PREFIX = "carcatch-supabase-scores:";
 const GAME_SETTINGS_STORAGE_PREFIX = "carcatch-settings:";
+const DEVICE_PROFILE_STORAGE_KEY = "carcatch-device-profiles";
 
 try {
   localStorage.removeItem("carcatch-guest-top-scores");
@@ -198,6 +200,44 @@ function loadUserStore() {
 
 function saveUserStore(store) {
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(store));
+}
+
+function loadDeviceProfileStore() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DEVICE_PROFILE_STORAGE_KEY) || "{}");
+    return saved.version === 1 && saved.profiles ? saved : { version: 1, activeId: null, profiles: {} };
+  } catch (_) {
+    return { version: 1, activeId: null, profiles: {} };
+  }
+}
+
+function saveDeviceProfileStore(store) {
+  localStorage.setItem(DEVICE_PROFILE_STORAGE_KEY, JSON.stringify(store));
+}
+
+function activateDeviceProfile(username) {
+  const trimmedUsername = String(username || "").trim();
+  const normalizedUsername = normalizeUsername(trimmedUsername);
+  if (normalizedUsername.length < 3) {
+    profileMessage = "Player name must contain at least 3 characters.";
+    return;
+  }
+  const store = loadDeviceProfileStore();
+  let profile = Object.values(store.profiles).find((entry) => entry.normalizedUsername === normalizedUsername);
+  if (!profile) {
+    const id = crypto.randomUUID?.() || `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    profile = { id, normalizedUsername, username: trimmedUsername, data: { highscores: {}, settings: {}, statistics: {} } };
+    store.profiles[id] = profile;
+  } else {
+    profile.username = trimmedUsername;
+  }
+  store.activeId = profile.id;
+  saveDeviceProfileStore(store);
+  currentUser = { key: profile.id, username: profile.username, source: "device" };
+  profileUsername = profile.username;
+  profilePassword = "";
+  profileMessage = "Local profile ready.";
+  loadGameSettings();
 }
 
 function normalizeUsername(username) {
@@ -236,6 +276,13 @@ function restoreUserSession() {
   } catch (_) {
     localStorage.removeItem(SUPABASE_USER_CACHE_KEY);
   }
+  const deviceStore = loadDeviceProfileStore();
+  const deviceProfile = deviceStore.profiles[deviceStore.activeId];
+  if (deviceProfile) {
+    currentUser = { key: deviceProfile.id, username: deviceProfile.username, source: "device" };
+    profileUsername = deviceProfile.username;
+    return;
+  }
   const userKey = localStorage.getItem(SESSION_STORAGE_KEY);
   if (!userKey) return;
   const account = loadUserStore().users[userKey];
@@ -244,12 +291,23 @@ function restoreUserSession() {
 }
 
 function getCurrentUserData() {
-  if (!currentUser || currentUser.source !== "local") return null;
-  return loadUserStore().users[currentUser.key]?.data || null;
+  if (!currentUser) return null;
+  if (currentUser.source === "local") return loadUserStore().users[currentUser.key]?.data || null;
+  if (currentUser.source === "device") return loadDeviceProfileStore().profiles[currentUser.key]?.data || null;
+  return null;
 }
 
 function updateCurrentUserData(update) {
-  if (!currentUser || currentUser.source !== "local") return;
+  if (!currentUser) return;
+  if (currentUser.source === "device") {
+    const store = loadDeviceProfileStore();
+    const profile = store.profiles[currentUser.key];
+    if (!profile) return;
+    profile.data = { ...profile.data, ...update };
+    saveDeviceProfileStore(store);
+    return;
+  }
+  if (currentUser.source !== "local") return;
   const store = loadUserStore();
   const account = store.users[currentUser.key];
   if (!account) return;
@@ -388,6 +446,11 @@ function logoutUser() {
   profileMessage = "Signed out.";
   localStorage.removeItem(SESSION_STORAGE_KEY);
   localStorage.removeItem(SUPABASE_USER_CACHE_KEY);
+  const deviceStore = loadDeviceProfileStore();
+  if (deviceStore.activeId) {
+    deviceStore.activeId = null;
+    saveDeviceProfileStore(deviceStore);
+  }
   loadGameSettings();
 }
 
@@ -485,7 +548,7 @@ async function initializeSupabaseIntegration() {
 
 function loadTopScores() {
   if (currentUser?.source === "supabase") return readSupabaseScoreCache(currentUser.key);
-  if (currentUser?.source === "local") return normalizeTopScores(getCurrentUserData()?.highscores);
+  if (currentUser?.source === "local" || currentUser?.source === "device") return normalizeTopScores(getCurrentUserData()?.highscores);
   if (!guestTopScores) guestTopScores = normalizeTopScores({});
   return normalizeTopScores(guestTopScores);
 }
@@ -495,7 +558,7 @@ function saveTopScores(scores) {
   if (currentUser?.source === "supabase") {
     writeSupabaseScoreCache(currentUser.key, normalized);
     void saveSupabaseHighscores(currentUser.key, normalized).catch(() => {});
-  } else if (currentUser?.source === "local") {
+  } else if (currentUser?.source === "local" || currentUser?.source === "device") {
     updateCurrentUserData({ highscores: normalized });
   } else {
     guestTopScores = normalized;
@@ -1801,7 +1864,7 @@ function drawLeaderboardMapPreview(mapIndex, x, y, width, height) {
 
 function drawLeaderboardCard(mapIndex, bounds, scores) {
   drawScorePanel(bounds, "rgba(24,29,39,0.95)", "rgba(255,255,255,0.2)", 11);
-  if (MOBILE_DEVICE) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
     text(MAPS[mapIndex].name, bounds.x + bounds.w / 2, bounds.y + 17, 21, BEIGE);
     const previewWidth = Math.min(150, bounds.w * 0.42);
     const previewHeight = previewWidth * 3 / 4;
@@ -1836,7 +1899,7 @@ function drawLeaderboard() {
   const startX = (WIDTH - totalWidth) / 2;
   for (let index = 0; index < timeOptions.length; index += 1) {
     const duration = timeOptions[index];
-    const tabY = MOBILE_DEVICE ? 160 : 108;
+    const tabY = MOBILE_PORTRAIT_LAYOUT ? 160 : 108;
     const tab = scaleMobileUiRect(rect(startX + index * (tabWidth + tabGap), tabY, tabWidth, 38), 1.08);
     buttons.leaderboardTimes.push([tab, duration]);
     const selected = duration === leaderboardTime;
@@ -1846,12 +1909,12 @@ function drawLeaderboard() {
 
   const allScores = loadTopScores()[leaderboardTime];
   const statsHeight = mobileScreenHeight();
-  const cardHeight = MOBILE_DEVICE ? Math.min(220, statsHeight * 0.17) : 178;
-  const statsTop = MOBILE_DEVICE ? 260 : 170;
-  const statsRowGap = MOBILE_DEVICE ? Math.max(28, (statsHeight - 100 - statsTop - cardHeight * 3) / 2) : 0;
+  const cardHeight = MOBILE_PORTRAIT_LAYOUT ? Math.min(220, statsHeight * 0.17) : 178;
+  const statsTop = MOBILE_PORTRAIT_LAYOUT ? 260 : 170;
+  const statsRowGap = MOBILE_PORTRAIT_LAYOUT ? Math.max(28, (statsHeight - 100 - statsTop - cardHeight * 3) / 2) : 0;
   const statsRowTwo = statsTop + cardHeight + statsRowGap;
   const statsRowThree = statsRowTwo + cardHeight + statsRowGap;
-  const cardPositions = MOBILE_DEVICE ? [
+  const cardPositions = MOBILE_PORTRAIT_LAYOUT ? [
     rect(45, statsTop, 340, cardHeight),
     rect(415, statsTop, 340, cardHeight),
     rect(45, statsRowTwo, 340, cardHeight),
@@ -1905,17 +1968,17 @@ function drawMenu() {
   drawProfileIconButton();
   drawLeaderboardIconButton();
   const screenHeight = mobileScreenHeight();
-  const startY = MOBILE_DEVICE ? Math.max(280, screenHeight * 0.3) : 138;
-  const promptY = MOBILE_DEVICE ? startY + 72 : 184;
-  const timeTitleY = MOBILE_DEVICE ? screenHeight * 0.47 : 293;
-  const timeButtonsY = MOBILE_DEVICE ? timeTitleY + 92 : 343;
-  const settingsY = MOBILE_DEVICE ? screenHeight * 0.7 : 490;
-  const startRect = centeredRect(WIDTH / 2, startY, MOBILE_DEVICE ? 280 : 200, MOBILE_DEVICE ? 92 : 60);
+  const startY = MOBILE_PORTRAIT_LAYOUT ? Math.max(280, screenHeight * 0.3) : 138;
+  const promptY = MOBILE_PORTRAIT_LAYOUT ? startY + 72 : 184;
+  const timeTitleY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.47 : 293;
+  const timeButtonsY = MOBILE_PORTRAIT_LAYOUT ? timeTitleY + 92 : 343;
+  const settingsY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.7 : 490;
+  const startRect = centeredRect(WIDTH / 2, startY, MOBILE_PORTRAIT_LAYOUT ? 280 : 200, MOBILE_PORTRAIT_LAYOUT ? 92 : 60);
   buttons.start = startRect;
   roundedRect(startRect, rgb(KHAKI), rgb(WHITE), 3, 10);
   fitText("START", startRect, 72, WHITE, 10, 6, 4);
   if (!MOBILE_DEVICE) text("Press Space to Start", WIDTH / 2, promptY, 18, WHITE);
-  text("Choose your Time", WIDTH / 2, timeTitleY, MOBILE_DEVICE ? 44 : 36, BEIGE);
+  text("Choose your Time", WIDTH / 2, timeTitleY, MOBILE_PORTRAIT_LAYOUT ? 44 : 36, BEIGE);
   const total = timeOptions.length * 60 + (timeOptions.length - 1) * 20;
   const startX = (WIDTH - total) / 2;
   for (let i = 0; i < timeOptions.length; i += 1) {
@@ -1925,8 +1988,8 @@ function drawMenu() {
     roundedRect(r, rgb(t === selectedTime ? YELLOW : DARK_BROWN), null, 1, 5);
     fitText(t < 60 ? `${t}s` : "1m", r, 36, t === selectedTime ? DARK_BROWN : WHITE, 6, 4, 3);
   }
-  drawButton("selectCar", centeredRect(WIDTH / 2 - 145, settingsY, MOBILE_DEVICE ? 260 : 180, MOBILE_DEVICE ? 72 : 50), "Car Settings", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
-  drawButton("selectMap", centeredRect(WIDTH / 2 + 145, settingsY, MOBILE_DEVICE ? 260 : 180, MOBILE_DEVICE ? 72 : 50), "Map Settings", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
+  drawButton("selectCar", centeredRect(WIDTH / 2 - (MOBILE_PORTRAIT_LAYOUT ? 145 : 100), settingsY, MOBILE_PORTRAIT_LAYOUT ? 260 : 180, MOBILE_PORTRAIT_LAYOUT ? 72 : 50), "Car Settings", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
+  drawButton("selectMap", centeredRect(WIDTH / 2 + (MOBILE_PORTRAIT_LAYOUT ? 145 : 100), settingsY, MOBILE_PORTRAIT_LAYOUT ? 260 : 180, MOBILE_PORTRAIT_LAYOUT ? 72 : 50), "Map Settings", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
 }
 
 function drawBackButton() {
@@ -1940,12 +2003,12 @@ function drawCarSelect() {
   drawCurrentBg("garage");
   drawSelectionTitle("Choose your Ride", [32, 52, 78], [105, 185, 235]);
   const screenHeight = mobileScreenHeight();
-  const carRowY = MOBILE_DEVICE ? screenHeight * 0.43 : HEIGHT / 2 - 20;
+  const carRowY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.43 : HEIGHT / 2 - 20;
   const original = selectedCar;
   for (let i = 0; i < CAR_MODELS.length; i += 1) {
     const model = CAR_MODELS[i];
     const x = WIDTH / 2 + (i - 2) * 150;
-    const y = MOBILE_DEVICE ? carRowY + Math.abs(i - 2) * 55 : HEIGHT / 2 - 20 + Math.abs(i - 2) * 40;
+    const y = MOBILE_PORTRAIT_LAYOUT ? carRowY + Math.abs(i - 2) * 55 : HEIGHT / 2 - 20 + Math.abs(i - 2) * 40;
     const r = centeredRect(x, y, 140, 140);
     buttons.carSelect.push([r, i]);
     ctx.beginPath();
@@ -1962,9 +2025,9 @@ function drawCarSelect() {
     text(model.name, x, y + 90, 24);
   }
   selectedCar = original;
-  const colorButtonY = MOBILE_DEVICE ? screenHeight * 0.72 : HEIGHT - 100;
-  drawButton("carColor", centeredRect(WIDTH / 2 - 165, colorButtonY, MOBILE_DEVICE ? 280 : 160, MOBILE_DEVICE ? 92 : 50), "Car Colour", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
-  drawButton("boostColor", centeredRect(WIDTH / 2 + 165, colorButtonY, MOBILE_DEVICE ? 280 : 160, MOBILE_DEVICE ? 92 : 50), "Boost Colour", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
+  const colorButtonY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.72 : HEIGHT - 100;
+  drawButton("carColor", centeredRect(WIDTH / 2 - (MOBILE_PORTRAIT_LAYOUT ? 165 : 120), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 280 : 160, MOBILE_PORTRAIT_LAYOUT ? 92 : 50), "Car Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
+  drawButton("boostColor", centeredRect(WIDTH / 2 + (MOBILE_PORTRAIT_LAYOUT ? 165 : 120), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 280 : 160, MOBILE_PORTRAIT_LAYOUT ? 92 : 50), "Boost Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
   drawBackButton();
 }
 
@@ -2005,6 +2068,10 @@ function mobilePaletteOptions(buttonKey = "colors") {
   };
 }
 
+function landscapePaletteOptions(buttonKey = "colors") {
+  return { buttonKey, cols: 12, box: 28, gap: 4, startX: 400, startY: 175 };
+}
+
 function drawMobileCarColorPreview(boosting = false) {
   const previewY = mobileScreenHeight() * 0.38;
   ctx.save();
@@ -2016,13 +2083,26 @@ function drawMobileCarColorPreview(boosting = false) {
   ctx.restore();
 }
 
+function drawLandscapeCarColorPreview(boosting = false) {
+  ctx.save();
+  ctx.translate(215, 315);
+  ctx.scale(3.1, 3.1);
+  ctx.translate(-WIDTH / 2, -180);
+  if (boosting) drawFlame();
+  drawCar(v(WIDTH / 2, 180), -90, boosting);
+  ctx.restore();
+}
+
 function drawColorSelect() {
   drawCurrentBg("garage");
   drawBackButton();
   drawSelectionTitle("Choose Car Colour", [32, 52, 78], [105, 185, 235]);
-  if (MOBILE_DEVICE) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
     drawMobileCarColorPreview(false);
     drawColorGrid(selectedColor, mobilePaletteOptions());
+  } else if (MOBILE_DEVICE) {
+    drawLandscapeCarColorPreview(false);
+    drawColorGrid(selectedColor, landscapePaletteOptions());
   } else {
     drawCar(v(WIDTH / 2, 180), -90);
     drawColorGrid(selectedColor);
@@ -2033,9 +2113,12 @@ function drawBoostColorSelect() {
   drawCurrentBg("garage");
   drawBackButton();
   drawSelectionTitle("Choose Boost Colour", [32, 52, 78], [105, 185, 235]);
-  if (MOBILE_DEVICE) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
     drawMobileCarColorPreview(true);
     drawColorGrid(selectedBoostColor, mobilePaletteOptions());
+  } else if (MOBILE_DEVICE) {
+    drawLandscapeCarColorPreview(true);
+    drawColorGrid(selectedBoostColor, landscapePaletteOptions());
   } else {
     drawFlame();
     drawCar(v(WIDTH / 2, 180), -90, true);
@@ -2058,16 +2141,16 @@ function drawMapPreview(x, y, w, h) {
 }
 
 function drawMapSelector(buttonKey, label, value, centerY) {
-  const previous = MOBILE_DEVICE ? rect(300, centerY - 40, 94, 80) : rect(370, centerY - 17, 34, 34);
-  const valueRect = MOBILE_DEVICE ? rect(404, centerY - 32, 192, 64) : rect(414, centerY - 17, 172, 34);
-  const next = MOBILE_DEVICE ? rect(606, centerY - 40, 94, 80) : rect(596, centerY - 17, 34, 34);
+  const previous = MOBILE_PORTRAIT_LAYOUT ? rect(300, centerY - 40, 94, 80) : rect(370, centerY - 17, 34, 34);
+  const valueRect = MOBILE_PORTRAIT_LAYOUT ? rect(404, centerY - 32, 192, 64) : rect(414, centerY - 17, 172, 34);
+  const next = MOBILE_PORTRAIT_LAYOUT ? rect(606, centerY - 40, 94, 80) : rect(596, centerY - 17, 34, 34);
   buttons[buttonKey] = [[previous, -1], [next, 1]];
-  text(`${label}:`, MOBILE_DEVICE ? 72 : 170, centerY, MOBILE_DEVICE ? 30 : 20, BEIGE, "left");
-  fitText(value, valueRect, MOBILE_DEVICE ? 30 : 20, WHITE, 6, 4);
+  text(`${label}:`, MOBILE_PORTRAIT_LAYOUT ? 72 : 170, centerY, MOBILE_PORTRAIT_LAYOUT ? 30 : 20, BEIGE, "left");
+  fitText(value, valueRect, MOBILE_PORTRAIT_LAYOUT ? 30 : 20, WHITE, 6, 4);
   roundedRect(previous, rgb(OBSTACLE_MID), null, 1, 5);
   roundedRect(next, rgb(OBSTACLE_MID), null, 1, 5);
-  fitText("<", previous, MOBILE_DEVICE ? 52 : 27, WHITE, 4, 4);
-  fitText(">", next, MOBILE_DEVICE ? 52 : 27, WHITE, 4, 4);
+  fitText("<", previous, MOBILE_PORTRAIT_LAYOUT ? 52 : 27, WHITE, 4, 4);
+  fitText(">", next, MOBILE_PORTRAIT_LAYOUT ? 52 : 27, WHITE, 4, 4);
 }
 
 function getMobileMapSettingsLayout() {
@@ -2092,11 +2175,11 @@ function getMobileMapSettingsLayout() {
 function drawMapSettings() {
   drawCurrentBg("map");
   drawSelectionTitle("Map Selection", [32, 52, 78], [105, 185, 235]);
-  const mobileLayout = MOBILE_DEVICE ? getMobileMapSettingsLayout() : null;
-  const bottomButtonY = MOBILE_DEVICE ? mobileLayout.bottomButtonY : 555;
-  const selectorGap = MOBILE_DEVICE ? mobileLayout.selectorGap : 42;
-  const selectorTop = MOBILE_DEVICE ? mobileLayout.selectorTop : 409;
-  if (MOBILE_DEVICE) {
+  const mobileLayout = MOBILE_PORTRAIT_LAYOUT ? getMobileMapSettingsLayout() : null;
+  const bottomButtonY = MOBILE_PORTRAIT_LAYOUT ? mobileLayout.bottomButtonY : 555;
+  const selectorGap = MOBILE_PORTRAIT_LAYOUT ? mobileLayout.selectorGap : 42;
+  const selectorTop = MOBILE_PORTRAIT_LAYOUT ? mobileLayout.selectorTop : 409;
+  if (MOBILE_PORTRAIT_LAYOUT) {
     const preview = mobileLayout.preview;
     drawMapPreview(preview.x, preview.y, preview.w, preview.h);
   } else {
@@ -2106,22 +2189,25 @@ function drawMapSettings() {
   const shapeName = obstacleShape[0].toUpperCase() + obstacleShape.slice(1);
   drawMapSelector("shapeNav", "Obstacle Shape", shapeName, selectorTop + selectorGap);
   drawMapSelector("themeNav", "Theme", THEMES[selectedThemeIndex].name, selectorTop + selectorGap * 2);
-  drawButton("mapColors", centeredRect(270, bottomButtonY, 230, MOBILE_DEVICE ? 64 : 50), "Theme Color", OBSTACLE_MID, 27);
-  drawButton("obstacleSettings", centeredRect(530, bottomButtonY, 230, MOBILE_DEVICE ? 64 : 50), "Obstacle Color", OBSTACLE_MID, 27);
+  drawButton("mapColors", centeredRect(270, bottomButtonY, 230, MOBILE_PORTRAIT_LAYOUT ? 64 : 50), "Theme Color", OBSTACLE_MID, 27);
+  drawButton("obstacleSettings", centeredRect(530, bottomButtonY, 230, MOBILE_PORTRAIT_LAYOUT ? 64 : 50), "Obstacle Color", OBSTACLE_MID, 27);
   drawBackButton();
 }
 
 function drawMapColorSettings() {
   drawCurrentBg("map");
   drawSelectionTitle("Theme Color", [32, 52, 78], [105, 185, 235]);
-  if (MOBILE_DEVICE) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
     const preview = getMobileMapSettingsLayout().preview;
     drawMapPreview(preview.x, preview.y, preview.w, preview.h);
-  } else drawMapPreview(290, 115, 220, 165);
+  } else if (MOBILE_DEVICE) drawMapPreview(45, 175, 320, 240);
+  else drawMapPreview(290, 115, 220, 165);
   const theme = THEMES[selectedThemeIndex];
   drawColorGrid(
     theme.structure === "neon" ? theme.lineColor : theme.bg,
-    MOBILE_DEVICE ? mobilePaletteOptions("mapBackgroundColors") : { buttonKey: "mapBackgroundColors" },
+    MOBILE_PORTRAIT_LAYOUT
+      ? mobilePaletteOptions("mapBackgroundColors")
+      : MOBILE_DEVICE ? landscapePaletteOptions("mapBackgroundColors") : { buttonKey: "mapBackgroundColors" },
   );
   drawBackButton();
 }
@@ -2129,10 +2215,13 @@ function drawMapColorSettings() {
 function drawObstacleSettings() {
   drawCurrentBg("map");
   drawSelectionTitle("Obstacle Color", [32, 52, 78], [105, 185, 235]);
-  if (MOBILE_DEVICE) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
     const preview = getMobileMapSettingsLayout().preview;
     drawMapPreview(preview.x, preview.y, preview.w, preview.h);
     drawColorGrid(obstacleColor, mobilePaletteOptions());
+  } else if (MOBILE_DEVICE) {
+    drawMapPreview(45, 175, 320, 240);
+    drawColorGrid(obstacleColor, landscapePaletteOptions());
   } else {
     drawMapPreview(290, 115, 220, 165);
     drawColorGrid(obstacleColor);
@@ -2294,7 +2383,7 @@ function drawScoreboard() {
     pendingScore = null;
   }
 
-  const scoreboardOffset = MOBILE_DEVICE ? (mobileScreenHeight() - HEIGHT) / 2 : 0;
+  const scoreboardOffset = MOBILE_PORTRAIT_LAYOUT ? (mobileScreenHeight() - HEIGHT) / 2 : 0;
   ctx.save();
   if (scoreboardOffset) ctx.translate(0, scoreboardOffset);
 
@@ -2363,7 +2452,7 @@ function drawScoreboard() {
       text("POINTS", movingBounds.x + movingBounds.w - 24, scorePosition.y, 17, [145, 150, 165], "right");
     }
   }
-  if (MOBILE_DEVICE) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
     ctx.restore();
     const actionY = mobileScreenHeight() - 135;
     drawButton("replay", centeredRect(230, actionY, 280, 96), "Replay", OBSTACLE_MID, 42);
@@ -2636,6 +2725,7 @@ window.CarCatch = {
     profilePassword = password;
   },
   submitProfile: (action) => void submitProfile(action),
+  useLocalProfile: (username) => activateDeviceProfile(username),
   setMobileInput: (horizontal, vertical) => {
     mobileInput = {
       x: Math.max(-1, Math.min(1, horizontal)),

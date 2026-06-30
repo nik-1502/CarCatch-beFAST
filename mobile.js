@@ -48,6 +48,7 @@ if (isMobile) {
   window.addEventListener("orientationchange", () => {
     canvasLayoutMode = "";
     restoreUnzoomedViewport();
+    window.setTimeout(() => window.location.reload(), 120);
   });
 
   function updateJoystick(clientX, clientY) {
@@ -71,6 +72,27 @@ if (isMobile) {
     window.CarCatch?.setMobileInput(0, 0);
   }
 
+  function handleAuthAction(action) {
+    if (action === "back") window.CarCatch?.goToMenu();
+    else if (action === "logout") window.CarCatch?.logout();
+    else if (action === "local-profile") {
+      const account = authPanel.querySelector('[name="account"]')?.value || "";
+      window.CarCatch?.useLocalProfile(account);
+    }
+    else {
+      const account = authPanel.querySelector('[name="account"]')?.value || "";
+      const password = authPanel.querySelector('[name="password"]')?.value || "";
+      window.CarCatch?.setProfileCredentials(account, password);
+      window.CarCatch?.submitProfile(action);
+    }
+  }
+
+  function bindAuthActions() {
+    for (const button of authPanel.querySelectorAll("[data-auth-action]")) {
+      button.addEventListener("click", () => handleAuthAction(button.dataset.authAction));
+    }
+  }
+
   joystick.addEventListener("pointerdown", (event) => {
     activePointer = event.pointerId;
     joystick.setPointerCapture(event.pointerId);
@@ -90,32 +112,18 @@ if (isMobile) {
         <button type="button" data-auth-action="logout">Sign Out</button>
         <button type="button" data-auth-action="back">Back</button>
       `;
+      bindAuthActions();
       return;
     }
     authPanel.innerHTML = `
-      <label>Account Name<input name="account" autocomplete="username" maxlength="32"></label>
-      <label>Password<input name="password" type="password" autocomplete="current-password" maxlength="64"></label>
-      <div class="mobile-auth-actions">
-        <button type="button" data-auth-action="login">Sign In</button>
-        <button type="button" data-auth-action="create">Create User</button>
-      </div>
+      <strong>Local Player Profile</strong>
+      <label>Player Name<input name="account" autocomplete="nickname" maxlength="32"></label>
+      <button type="button" data-auth-action="local-profile">Continue</button>
       <p class="mobile-auth-status"></p>
       <button type="button" class="mobile-auth-back" data-auth-action="back">Back</button>
     `;
+    bindAuthActions();
   }
-
-  authPanel.addEventListener("click", (event) => {
-    const action = event.target.closest("[data-auth-action]")?.dataset.authAction;
-    if (!action) return;
-    if (action === "back") window.CarCatch?.goToMenu();
-    else if (action === "logout") window.CarCatch?.logout();
-    else {
-      const account = authPanel.querySelector('[name="account"]')?.value || "";
-      const password = authPanel.querySelector('[name="password"]')?.value || "";
-      window.CarCatch?.setProfileCredentials(account, password);
-      window.CarCatch?.submitProfile(action);
-    }
-  });
 
   authPanel.addEventListener("input", (event) => {
     if (!(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)) return;

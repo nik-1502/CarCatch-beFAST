@@ -259,6 +259,34 @@ canvas {
   }
 
   @media (orientation: landscape) {
+    html.mobile-device .game-shell:not(.mobile-gameplay) #game {
+      left: 50%;
+      top: 0;
+      width: calc(100dvh * 4 / 3);
+      height: 100dvh;
+      aspect-ratio: 4 / 3;
+      transform: translateX(-50%);
+    }
+
+    html.mobile-device .mobile-auth:not([hidden]) {
+      top: 50%;
+      width: min(78vw, 720px);
+      max-height: 92dvh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    html.mobile-device .mobile-auth strong,
+    html.mobile-device .mobile-auth .mobile-auth-actions,
+    html.mobile-device .mobile-auth .mobile-auth-status,
+    html.mobile-device .mobile-auth .mobile-auth-back,
+    html.mobile-device .mobile-auth > button {
+      grid-column: 1 / -1;
+    }
+
     html.mobile-device .mobile-gameplay {
       --mobile-map-width: min(calc(100dvh * 4 / 3), 68vw);
       --mobile-map-height: calc(var(--mobile-map-width) * 3 / 4);
