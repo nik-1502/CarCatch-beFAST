@@ -7,12 +7,6 @@ const detectMobile = () => (navigator.maxTouchPoints > 0 && (coarsePointer.match
   || portraitMobilePreview.matches;
 const isMobile = detectMobile();
 
-for (const mediaQuery of [coarsePointer, mobileViewport, narrowMobilePreview, portraitMobilePreview]) {
-  mediaQuery.addEventListener("change", () => {
-    if (detectMobile() !== isMobile) window.location.reload();
-  });
-}
-
 if (isMobile) {
   document.documentElement.classList.add("mobile-device");
 
@@ -27,6 +21,7 @@ if (isMobile) {
   const stick = document.querySelector(".joystick-stick");
   const authPanel = document.querySelector(".mobile-auth");
   const landscapeActions = document.querySelector(".mobile-landscape-actions");
+  const gameplayBack = document.querySelector(".mobile-gameplay-back");
   let activePointer = null;
   let joystickBounds = null;
   let joystickFrame = 0;
@@ -51,8 +46,14 @@ if (isMobile) {
   window.visualViewport?.addEventListener("scroll", restoreUnzoomedViewport);
   window.addEventListener("orientationchange", () => {
     canvasLayoutMode = "";
+    releaseJoystick();
     restoreUnzoomedViewport();
-    window.setTimeout(() => window.location.reload(), 120);
+    window.CarCatch?.handleOrientationChange();
+    window.setTimeout(() => {
+      canvasLayoutMode = "";
+      window.CarCatch?.handleOrientationChange();
+      restoreUnzoomedViewport();
+    }, 180);
   });
 
   function updateJoystick(clientX, clientY) {
@@ -132,6 +133,7 @@ if (isMobile) {
     else if (action === "leaderboard") window.CarCatch?.openLeaderboard();
     else if (action === "back") window.CarCatch?.goBack();
   });
+  gameplayBack.addEventListener("click", () => window.CarCatch?.leaveGameplay());
 
   function renderAuthPanel(user) {
     if (user) {
@@ -205,12 +207,12 @@ if (isMobile) {
   function syncMobileLayout() {
     const state = window.CarCatch?.getState() || "menu";
     const gameplay = state === "game" || state === "countdown";
-    const landscape = window.matchMedia("(orientation: landscape)").matches;
-    const landscapeMenu = landscape && state === "menu";
-    const landscapeBack = landscape && !["menu", "game", "countdown", "scoreboard"].includes(state);
-    landscapeActions.hidden = !(landscapeMenu || landscapeBack);
-    landscapeActions.classList.toggle("show-menu-actions", landscapeMenu);
-    landscapeActions.classList.toggle("show-back-action", landscapeBack);
+    const mobileMenu = state === "menu";
+    const mobileBack = !["menu", "game", "countdown", "scoreboard"].includes(state);
+    landscapeActions.hidden = !(mobileMenu || mobileBack);
+    landscapeActions.classList.toggle("show-menu-actions", mobileMenu);
+    landscapeActions.classList.toggle("show-back-action", mobileBack);
+    gameplayBack.hidden = !gameplay;
     shell.classList.toggle("mobile-gameplay", gameplay);
     const nextCanvasLayoutMode = gameplay ? "gameplay" : "portrait-ui";
     if (canvasLayoutMode !== nextCanvasLayoutMode) {

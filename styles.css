@@ -38,7 +38,8 @@ canvas {
 
 .mobile-controls,
 .mobile-auth,
-.mobile-landscape-actions {
+.mobile-landscape-actions,
+.mobile-gameplay-back {
   display: none;
 }
 
@@ -225,6 +226,75 @@ canvas {
     font-size: 17px;
   }
 
+  html.mobile-device .mobile-landscape-actions:not([hidden]) {
+    position: fixed;
+    z-index: 8;
+    inset: 0;
+    display: block;
+    pointer-events: none;
+  }
+
+  html.mobile-device .mobile-landscape-left {
+    position: absolute;
+    top: max(20px, env(safe-area-inset-top));
+    left: max(20px, env(safe-area-inset-left));
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  html.mobile-device .show-menu-actions .mobile-landscape-left {
+    display: flex;
+  }
+
+  html.mobile-device .mobile-landscape-actions button {
+    width: 88px;
+    height: 88px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    color: #fff;
+    background: rgb(190, 120, 70);
+    font: 700 22px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+    pointer-events: auto;
+  }
+
+  html.mobile-device .mobile-landscape-actions svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    fill: #fff;
+  }
+
+  html.mobile-device .mobile-landscape-back {
+    position: absolute;
+    top: max(20px, env(safe-area-inset-top));
+    right: max(20px, env(safe-area-inset-right));
+    display: none;
+    background: rgb(180, 60, 60) !important;
+  }
+
+  html.mobile-device .show-back-action .mobile-landscape-back {
+    display: block;
+  }
+
+  html.mobile-device .mobile-gameplay-back:not([hidden]) {
+    position: fixed;
+    z-index: 9;
+    left: max(14px, env(safe-area-inset-left));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    display: block;
+    min-width: 92px;
+    min-height: 58px;
+    padding: 8px 16px;
+    border: 2px solid rgba(255, 255, 255, 0.32);
+    border-radius: 10px;
+    color: #fff;
+    background: rgb(180, 60, 60);
+    font: 700 22px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+    touch-action: manipulation;
+  }
+
   html.mobile-device .mobile-auth input {
     padding: 0 14px;
     background: #1d2028;
@@ -259,6 +329,13 @@ canvas {
   }
 
   @media (orientation: landscape) {
+    html.mobile-device .mobile-gameplay-back:not([hidden]) {
+      top: max(14px, env(safe-area-inset-top));
+      right: max(14px, env(safe-area-inset-right));
+      bottom: auto;
+      left: auto;
+    }
+
     html.mobile-device .mobile-landscape-actions:not([hidden]) {
       position: fixed;
       z-index: 8;
@@ -272,6 +349,7 @@ canvas {
       top: max(14px, env(safe-area-inset-top));
       left: max(14px, env(safe-area-inset-left));
       display: none;
+      flex-direction: row;
       gap: 10px;
     }
 
@@ -289,6 +367,13 @@ canvas {
       background: rgb(190, 120, 70);
       font: 700 18px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
       pointer-events: auto;
+    }
+
+    html.mobile-device .mobile-landscape-actions svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      fill: #fff;
     }
 
     html.mobile-device .mobile-landscape-back {

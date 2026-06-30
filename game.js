@@ -16,8 +16,8 @@ const MOBILE_DEVICE = (navigator.maxTouchPoints > 0
   && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1024px)").matches))
   || window.matchMedia("(max-width: 700px)").matches
   || window.matchMedia("(max-width: 1024px) and (orientation: portrait)").matches;
-const MOBILE_PORTRAIT_LAYOUT = MOBILE_DEVICE && window.matchMedia("(orientation: portrait)").matches;
-const MOBILE_LANDSCAPE_LAYOUT = MOBILE_DEVICE && !MOBILE_PORTRAIT_LAYOUT;
+let MOBILE_PORTRAIT_LAYOUT = MOBILE_DEVICE && window.matchMedia("(orientation: portrait)").matches;
+let MOBILE_LANDSCAPE_LAYOUT = MOBILE_DEVICE && !MOBILE_PORTRAIT_LAYOUT;
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -596,6 +596,7 @@ function finishRound() {
     endedAt: performance.now(),
     committed: false,
   };
+  commitPendingScore();
   state = "scoreboard";
 }
 
@@ -1544,7 +1545,7 @@ function drawScore(remainingOverride = null) {
   text(String(score), WIDTH / 2, HEIGHT / 2, 36);
   const remaining = remainingOverride ?? Math.max(0, selectedTime - (performance.now() - gameStartTime) / 1000);
   text(`${remaining.toFixed(1)}s`, WIDTH - 100, 20, 36, WHITE, "left", "top");
-  text("Press ENTER to leave", WIDTH - 20, 60, 24, WHITE, "right", "top");
+  if (!MOBILE_DEVICE) text("Press ENTER to leave", WIDTH - 20, 60, 24, WHITE, "right", "top");
 }
 
 function drawCar(pos, angle, boosting = false, overrideCar = null, overrideColor = null) {
@@ -1636,7 +1637,7 @@ function drawCar(pos, angle, boosting = false, overrideCar = null, overrideColor
 
 }
 
-function drawFlame(pos, angle, carType = selectedCar) {
+function drawFlame(pos, angle, carType = selectedCar, motionAmount = 0) {
   if (!MOBILE_DEVICE) {
     const lightColor = lighten(selectedBoostColor, 1.4);
     for (let index = flameParticles.length - 1; index >= 0; index -= 1) {
@@ -1657,6 +1658,7 @@ function drawFlame(pos, angle, carType = selectedCar) {
   ctx.save();
   ctx.translate(origin.x, origin.y);
   ctx.rotate(rad);
+  ctx.scale(1 + Math.max(0, Math.min(1, motionAmount)) * (8 / 49), 1);
   ctx.globalCompositeOperation = "lighter";
 
   ctx.beginPath();
@@ -1689,8 +1691,8 @@ function drawFlame(pos, angle, carType = selectedCar) {
   ctx.restore();
 }
 
-function drawBoostedCar(pos, angle, boosting = false, overrideCar = null, overrideColor = null) {
-  if (boosting) drawFlame(pos, angle, overrideCar || selectedCar);
+function drawBoostedCar(pos, angle, boosting = false, overrideCar = null, overrideColor = null, motionAmount = 0) {
+  if (boosting) drawFlame(pos, angle, overrideCar || selectedCar, motionAmount);
   drawCar(pos, angle, boosting, overrideCar, overrideColor);
 }
 
@@ -1878,7 +1880,7 @@ function drawSelectionTitle(label, fillColor, borderColor) {
 }
 
 function drawProfileIconButton() {
-  if (MOBILE_LANDSCAPE_LAYOUT) {
+  if (MOBILE_DEVICE) {
     buttons.profile = rect(-1, -1, 0, 0);
     return;
   }
@@ -1897,7 +1899,7 @@ function drawProfileIconButton() {
 }
 
 function drawLeaderboardIconButton() {
-  if (MOBILE_LANDSCAPE_LAYOUT) {
+  if (MOBILE_DEVICE) {
     buttons.leaderboard = rect(-1, -1, 0, 0);
     return;
   }
@@ -2064,7 +2066,7 @@ function drawMenu() {
 }
 
 function drawBackButton() {
-  if (MOBILE_LANDSCAPE_LAYOUT) {
+  if (MOBILE_DEVICE) {
     buttons.back = rect(-1, -1, 0, 0);
     return;
   }
@@ -2573,7 +2575,7 @@ function drawGameplayScene(remainingOverride = null, showBoost = false) {
   drawCollectible();
   drawScore(remainingOverride);
   drawTeleportEffect();
-  drawBoostedCar(carPos, carAngle, showBoost);
+  drawBoostedCar(carPos, carAngle, showBoost, null, null, Math.abs(velocity) / maxSpeed);
 }
 
 function drawCountdown() {
@@ -2811,6 +2813,14 @@ window.CarCatch = {
     else if (state === "map_color_settings" || state === "obstacle_settings") state = "map_settings";
     else state = "menu";
     saveGameSettings();
+  },
+  leaveGameplay: () => {
+    if (state === "game" || state === "countdown") state = "menu";
+    mobileInput = { x: 0, y: 0 };
+  },
+  handleOrientationChange: () => {
+    MOBILE_PORTRAIT_LAYOUT = MOBILE_DEVICE && window.matchMedia("(orientation: portrait)").matches;
+    MOBILE_LANDSCAPE_LAYOUT = MOBILE_DEVICE && !MOBILE_PORTRAIT_LAYOUT;
   },
   logout: () => logoutUser(),
   setProfileCredentials: (accountName, password) => {
