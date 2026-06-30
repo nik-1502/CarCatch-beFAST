@@ -2556,7 +2556,7 @@ function drawFrame(now) {
       updateGame();
       physicsAccumulator -= physicsStep;
     }
-    drawGameplayScene();
+    drawGameplayScene(null, true);
   }
   requestAnimationFrame(drawFrame);
 }
