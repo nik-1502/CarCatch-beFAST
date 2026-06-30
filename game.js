@@ -140,6 +140,7 @@ let profileMessage = "";
 let profileBusy = false;
 let leaderboardTime = 30;
 let mobileInput = { x: 0, y: 0 };
+let ignoredStartObstacles = new Set();
 
 const carLength = 40;
 const collectibleRadius = 10;
@@ -679,7 +680,9 @@ function line(a, b, color, width = 1) {
 }
 
 const DEFAULT_FONT_FAMILY = `"Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif`;
-const CARTOON_FONT_FAMILY = `"Comic Sans MS", "Comic Sans", cursive`;
+// Keep the desktop face first, but avoid the generic `cursive` fallback: on
+// mobile browsers that fallback often resolves to an unrelated script font.
+const TITLE_FONT_FAMILY = `"Comic Sans MS", "Comic Sans", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif`;
 
 function text(value, x, y, size, color = WHITE, align = "center", baseline = "middle", fontFamily = DEFAULT_FONT_FAMILY) {
   ctx.font = `700 ${size}px ${fontFamily}`;
@@ -1642,6 +1645,11 @@ function drawFlame() {
   }
 }
 
+function drawBoostedCar(pos, angle, boosting = false, overrideCar = null, overrideColor = null) {
+  if (boosting) drawFlame();
+  drawCar(pos, angle, boosting, overrideCar, overrideColor);
+}
+
 function triggerTeleportEffect(origin) {
   const startedAt = performance.now();
   const particles = [];
@@ -1704,6 +1712,7 @@ function drawTeleportEffect() {
 function respawnCar() {
   carPos = copy(MAPS[selectedMapIndex].spawn || v(WIDTH / 2, HEIGHT / 2));
   velocity = 0;
+  ignoredStartObstacles.clear();
   triggerTeleportEffect(carPos);
 }
 
@@ -1711,6 +1720,11 @@ function startGame() {
   commitPendingScore();
   pendingScore = null;
   respawnCar();
+  if (MOBILE_DEVICE) {
+    carPos = v(WIDTH / 2, HEIGHT / 2);
+    carAngle = 0;
+    ignoredStartObstacles = new Set(obstacles.filter(collidesWithObstacle));
+  }
   score = 0;
   collectiblePos = spawnCollectible();
   flameParticles.length = 0;
@@ -1767,7 +1781,10 @@ function collidesWithObstacle(position) {
 }
 
 function handleCollisions() {
-  if (obstacles.some(collidesWithObstacle)) {
+  for (const obstacle of ignoredStartObstacles) {
+    if (!collidesWithObstacle(obstacle)) ignoredStartObstacles.delete(obstacle);
+  }
+  if (obstacles.some((obstacle) => !ignoredStartObstacles.has(obstacle) && collidesWithObstacle(obstacle))) {
     respawnCar();
     return;
   }
@@ -1813,7 +1830,7 @@ function drawSelectionTitle(label, fillColor, borderColor) {
   const titleRect = centeredRect(WIDTH / 2, MOBILE_DEVICE ? 62 : 60, MOBILE_DEVICE ? 520 : 500, MOBILE_DEVICE ? 76 : 70);
   roundedRect(titleRect, rgb(fillColor), rgb(borderColor), 4, 10);
   const centeredTextArea = rect(titleRect.x, titleRect.y, titleRect.w, titleRect.h);
-  fitText(label, centeredTextArea, MOBILE_DEVICE ? 45 : 42, WHITE, 24, 10, 3, CARTOON_FONT_FAMILY);
+  fitText(label, centeredTextArea, MOBILE_DEVICE ? 45 : 42, WHITE, 24, 10, 3, TITLE_FONT_FAMILY);
 }
 
 function drawProfileIconButton() {
@@ -2080,8 +2097,7 @@ function drawMobileCarColorPreview(boosting = false) {
   ctx.translate(WIDTH / 2, previewY);
   ctx.scale(3.2, 3.2);
   ctx.translate(-WIDTH / 2, -180);
-  if (boosting) drawFlame();
-  drawCar(v(WIDTH / 2, 180), -90, boosting);
+  drawBoostedCar(v(WIDTH / 2, 180), -90, boosting);
   ctx.restore();
 }
 
@@ -2090,8 +2106,7 @@ function drawLandscapeCarColorPreview(boosting = false) {
   ctx.translate(215, 315);
   ctx.scale(3.1, 3.1);
   ctx.translate(-WIDTH / 2, -180);
-  if (boosting) drawFlame();
-  drawCar(v(WIDTH / 2, 180), -90, boosting);
+  drawBoostedCar(v(WIDTH / 2, 180), -90, boosting);
   ctx.restore();
 }
 
@@ -2122,8 +2137,7 @@ function drawBoostColorSelect() {
     drawLandscapeCarColorPreview(true);
     drawColorGrid(selectedBoostColor, landscapePaletteOptions());
   } else {
-    drawFlame();
-    drawCar(v(WIDTH / 2, 180), -90, true);
+    drawBoostedCar(v(WIDTH / 2, 180), -90, true);
     drawColorGrid(selectedBoostColor);
   }
 }
@@ -2502,9 +2516,8 @@ function drawGameplayScene(remainingOverride = null, showBoost = false) {
   drawObstacles();
   drawCollectible();
   drawScore(remainingOverride);
-  if (showBoost) drawFlame();
   drawTeleportEffect();
-  drawCar(carPos, carAngle);
+  drawBoostedCar(carPos, carAngle, showBoost);
 }
 
 function drawCountdown() {
@@ -2518,8 +2531,9 @@ function drawCountdown() {
   const number = String(3 - Math.floor(elapsed));
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  circle(v(WIDTH / 2, HEIGHT / 2), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
-  text(number, WIDTH / 2, HEIGHT / 2 + 2, 96, WHITE);
+  const countdownY = MOBILE_DEVICE ? HEIGHT / 4 : HEIGHT / 2;
+  circle(v(WIDTH / 2, countdownY), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
+  text(number, WIDTH / 2, countdownY + 2, 96, WHITE);
 }
 
 function drawFrame(now) {
