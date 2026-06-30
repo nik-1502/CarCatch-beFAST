@@ -18,6 +18,13 @@
         <span class="joystick-label">DRIVE</span>
       </section>
       <section class="mobile-auth" aria-label="Account-Anmeldung" hidden></section>
+      <nav class="mobile-landscape-actions" aria-label="Mobile Navigation" hidden>
+        <div class="mobile-landscape-left">
+          <button type="button" data-mobile-action="profile" aria-label="Benutzerprofil"><span class="mobile-profile-icon"></span></button>
+          <button type="button" data-mobile-action="leaderboard" aria-label="Bestenliste"><span class="mobile-crown-icon">&#9819;</span></button>
+        </div>
+        <button type="button" class="mobile-landscape-back" data-mobile-action="back">Back</button>
+      </nav>
     </main>
     <script type="module" src="game.js"></script>
     <script type="module" src="mobile.js"></script>

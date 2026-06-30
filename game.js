@@ -17,6 +17,7 @@ const MOBILE_DEVICE = (navigator.maxTouchPoints > 0
   || window.matchMedia("(max-width: 700px)").matches
   || window.matchMedia("(max-width: 1024px) and (orientation: portrait)").matches;
 const MOBILE_PORTRAIT_LAYOUT = MOBILE_DEVICE && window.matchMedia("(orientation: portrait)").matches;
+const MOBILE_LANDSCAPE_LAYOUT = MOBILE_DEVICE && !MOBILE_PORTRAIT_LAYOUT;
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -1628,25 +1629,68 @@ function drawCar(pos, angle, boosting = false, overrideCar = null, overrideColor
     circle(sub(pos, mul(dir, 5)), 5, rgb(CAR_WINDOW));
   }
 
-  if (state === "game" || boosting) {
+  if (!MOBILE_DEVICE && (state === "game" || boosting)) {
     const origin = sub(rear, mul(dir, 6));
     flameParticles.push({ pos: copy(origin), vel: mul(dir, -(1.5 + Math.random() * 1.5)), life: randInt(12, 22) });
   }
+
 }
 
-function drawFlame() {
-  const cLight = lighten(selectedBoostColor, 1.4);
-  for (let i = flameParticles.length - 1; i >= 0; i -= 1) {
-    const p = flameParticles[i];
-    p.pos = add(p.pos, p.vel);
-    p.life -= 1;
-    circle(p.pos, Math.max(1, Math.floor(p.life / 3)), rgb(p.life > 8 ? selectedBoostColor : cLight));
-    if (p.life <= 0) flameParticles.splice(i, 1);
+function drawFlame(pos, angle, carType = selectedCar) {
+  if (!MOBILE_DEVICE) {
+    const lightColor = lighten(selectedBoostColor, 1.4);
+    for (let index = flameParticles.length - 1; index >= 0; index -= 1) {
+      const particle = flameParticles[index];
+      particle.pos = add(particle.pos, particle.vel);
+      particle.life -= 1;
+      circle(particle.pos, Math.max(1, Math.floor(particle.life / 3)), rgb(particle.life > 8 ? selectedBoostColor : lightColor));
+      if (particle.life <= 0) flameParticles.splice(index, 1);
+    }
+    return;
   }
+
+  const rearDistance = ({ 1: 26, 2: 28, 3: 30, 4: 28, 5: 26 })[carType] || 26;
+  const rad = angle * Math.PI / 180;
+  const origin = v(pos.x - Math.cos(rad) * rearDistance, pos.y - Math.sin(rad) * rearDistance);
+  const lightColor = lighten(selectedBoostColor, 1.55);
+
+  ctx.save();
+  ctx.translate(origin.x, origin.y);
+  ctx.rotate(rad);
+  ctx.globalCompositeOperation = "lighter";
+
+  ctx.beginPath();
+  ctx.moveTo(3, -8);
+  ctx.bezierCurveTo(-12, -13, -34, -8, -49, 0);
+  ctx.bezierCurveTo(-34, 8, -12, 13, 3, 8);
+  ctx.closePath();
+  ctx.fillStyle = rgb(selectedBoostColor, 0.34);
+  ctx.shadowColor = rgb(selectedBoostColor, 0.9);
+  ctx.shadowBlur = 14;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(2, -5.5);
+  ctx.bezierCurveTo(-12, -8, -27, -5, -41, 0);
+  ctx.bezierCurveTo(-27, 5, -12, 8, 2, 5.5);
+  ctx.closePath();
+  ctx.fillStyle = rgb(selectedBoostColor, 0.82);
+  ctx.shadowBlur = 7;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(1, -2.4);
+  ctx.quadraticCurveTo(-14, -3.5, -29, 0);
+  ctx.quadraticCurveTo(-14, 3.5, 1, 2.4);
+  ctx.closePath();
+  ctx.fillStyle = rgb(lightColor, 0.92);
+  ctx.shadowBlur = 3;
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawBoostedCar(pos, angle, boosting = false, overrideCar = null, overrideColor = null) {
-  if (boosting) drawFlame();
+  if (boosting) drawFlame(pos, angle, overrideCar || selectedCar);
   drawCar(pos, angle, boosting, overrideCar, overrideColor);
 }
 
@@ -1834,6 +1878,10 @@ function drawSelectionTitle(label, fillColor, borderColor) {
 }
 
 function drawProfileIconButton() {
+  if (MOBILE_LANDSCAPE_LAYOUT) {
+    buttons.profile = rect(-1, -1, 0, 0);
+    return;
+  }
   const size = MOBILE_DEVICE ? 88 : 54;
   const button = rect(20, MOBILE_DEVICE ? 20 : 20, size, size);
   buttons.profile = button;
@@ -1849,6 +1897,10 @@ function drawProfileIconButton() {
 }
 
 function drawLeaderboardIconButton() {
+  if (MOBILE_LANDSCAPE_LAYOUT) {
+    buttons.leaderboard = rect(-1, -1, 0, 0);
+    return;
+  }
   const size = MOBILE_DEVICE ? 88 : 54;
   const button = rect(20, MOBILE_DEVICE ? 122 : 84, size, size);
   buttons.leaderboard = button;
@@ -2012,6 +2064,10 @@ function drawMenu() {
 }
 
 function drawBackButton() {
+  if (MOBILE_LANDSCAPE_LAYOUT) {
+    buttons.back = rect(-1, -1, 0, 0);
+    return;
+  }
   buttons.back = MOBILE_DEVICE ? rect(WIDTH - 108, 18, 88, 88) : rect(WIDTH - 120, 20, 100, 40);
   roundedRect(buttons.back, rgb(RELAXED_RED), null, 1, 8);
   fitText("Back", buttons.back, 28);
@@ -2742,6 +2798,19 @@ window.CarCatch = {
   getProfileStatus: () => profileMessage,
   goToMenu: () => {
     state = "menu";
+  },
+  openProfile: () => {
+    state = "profile";
+  },
+  openLeaderboard: () => {
+    state = "leaderboard";
+  },
+  goBack: () => {
+    if (state === "color_select" || state === "boost_color_select") state = "car_select";
+    else if (state === "background_select_specific") state = "background_categories";
+    else if (state === "map_color_settings" || state === "obstacle_settings") state = "map_settings";
+    else state = "menu";
+    saveGameSettings();
   },
   logout: () => logoutUser(),
   setProfileCredentials: (accountName, password) => {
