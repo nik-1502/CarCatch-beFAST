@@ -4,7 +4,7 @@
     {
       "label": "CarCatch: Start local server",
       "type": "process",
-      "command": "python",
+      "command": "${env:LOCALAPPDATA}\\Programs\\Python\\Python311\\python.exe",
       "args": [
         "-u",
         "-m",

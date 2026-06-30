@@ -12,8 +12,10 @@ import {
 
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-const MOBILE_DEVICE = navigator.maxTouchPoints > 0
-  && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1024px)").matches);
+const MOBILE_DEVICE = (navigator.maxTouchPoints > 0
+  && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(max-width: 1024px)").matches))
+  || window.matchMedia("(max-width: 700px)").matches
+  || window.matchMedia("(max-width: 1024px) and (orientation: portrait)").matches;
 
 const WIDTH = 800;
 const HEIGHT = 600;
@@ -114,6 +116,7 @@ let gameStartTime = 0;
 let scoreboardTime = 30;
 let scoreboardLayout = MAPS[0].name;
 let pendingScore = null;
+let guestTopScores = null;
 let selectedCar = 1;
 let selectedCarIndex = 2;
 let selectedColor = FULL_PALETTE[47];
@@ -483,7 +486,8 @@ async function initializeSupabaseIntegration() {
 function loadTopScores() {
   if (currentUser?.source === "supabase") return readSupabaseScoreCache(currentUser.key);
   if (currentUser?.source === "local") return normalizeTopScores(getCurrentUserData()?.highscores);
-  return normalizeTopScores({});
+  if (!guestTopScores) guestTopScores = normalizeTopScores({});
+  return normalizeTopScores(guestTopScores);
 }
 
 function saveTopScores(scores) {
@@ -493,6 +497,8 @@ function saveTopScores(scores) {
     void saveSupabaseHighscores(currentUser.key, normalized).catch(() => {});
   } else if (currentUser?.source === "local") {
     updateCurrentUserData({ highscores: normalized });
+  } else {
+    guestTopScores = normalized;
   }
 }
 
@@ -632,7 +638,10 @@ function fitText(value, r, maxSize, color = WHITE, padX = 10, padY = 6, offsetY 
 function spawnCollectible() {
   while (true) {
     const pos = v(randInt(80, WIDTH - 80), randInt(80, HEIGHT - 80));
-    if (obstacles.every((o) => dist(pos, o) >= radius + 40)) return pos;
+    const behindMobileScore = MOBILE_DEVICE
+      && Math.abs(pos.x - WIDTH / 2) < 120
+      && Math.abs(pos.y - HEIGHT / 2) < 90;
+    if (!behindMobileScore && obstacles.every((o) => dist(pos, o) >= radius + 40)) return pos;
   }
 }
 
@@ -1063,7 +1072,7 @@ function updateMobileBackground(category) {
 
   const bounds = backdrop.getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
   const targetWidth = Math.max(1, Math.round(bounds.width * pixelRatio));
   const targetHeight = Math.max(1, Math.round(bounds.height * pixelRatio));
   if (backdrop.width !== targetWidth || backdrop.height !== targetHeight) {
@@ -1191,22 +1200,17 @@ function updateMobileBackground(category) {
   } else if (backgroundId === "garage_hex") {
     g.fillStyle = "rgb(30,30,35)";
     g.fillRect(0, 0, w, h);
-    const size = 26;
-    for (let y = -size; y < h + size; y += 46) {
-      for (let x = -size; x < w + size; x += 54) {
-        const cx = x + (Math.floor(y / 46) % 2 ? 27 : 0);
-        const shade = 42 + Math.floor(Math.sin(cx * 0.02 + y * 0.015 + t * 2) * 18);
-        g.beginPath();
-        for (let side = 0; side < 6; side += 1) {
-          const angle = Math.PI / 3 * side;
-          const px = cx + Math.cos(angle) * size;
-          const py = y + Math.sin(angle) * size;
-          if (!side) g.moveTo(px, py); else g.lineTo(px, py);
-        }
-        g.closePath();
-        g.strokeStyle = `rgb(${shade},${shade},${shade + 10})`;
-        g.lineWidth = 2;
-        g.stroke();
+    const garageScale = w / WIDTH;
+    const step = 60 * garageScale;
+    const radius = 25 * garageScale;
+    for (let y = 0, row = 0; y < h + step; y += step, row += 1) {
+      for (let x = 0; x < w + step; x += step) {
+        const offset = row % 2 === 0 ? step / 2 : 0;
+        const logicalX = (x + offset) / garageScale;
+        const logicalY = y / garageScale;
+        const shade = 40 + Math.trunc(Math.sin(logicalX * 0.01 + logicalY * 0.01 + t * 2) * 20);
+        g.lineWidth = Math.max(1, 2 * garageScale);
+        dot(x + offset, y, radius, `rgb(${shade},${shade},${shade + 10})`, true);
       }
     }
   } else if (backgroundId === "garage_smoke") {
@@ -1262,12 +1266,16 @@ function updateMobileBackground(category) {
     g.fillStyle = "rgb(30,30,30)";
     g.fillRect(0, 0, w, h);
     g.strokeStyle = "rgba(135,135,135,0.7)";
-    g.lineWidth = 1.5;
-    for (let band = -2; band < Math.ceil(h / 65) + 2; band += 1) {
+    const mapScale = w / WIDTH;
+    g.lineWidth = Math.max(1, 2 * mapScale);
+    for (let band = 0; band < 5; band += 1) {
       g.beginPath();
-      for (let x = -10; x <= w + 10; x += 10) {
-        const y = band * 65 + 45 + Math.sin(x * 0.025 + t + band) * 23 + Math.sin(x * 0.009 - t) * 14;
-        if (x === -10) g.moveTo(x, y); else g.lineTo(x, y);
+      for (let x = 0; x <= w + 10; x += 10) {
+        const logicalX = x / mapScale;
+        const y = h / 2
+          + Math.sin(logicalX * 0.01 + t + band) * 50 * mapScale
+          + (band - 2) * 60 * mapScale;
+        if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
       }
       g.stroke();
     }
@@ -1718,21 +1726,34 @@ function handleCollect() {
 }
 
 function drawButton(name, r, label, fill, size = 36, stroke = null) {
+  if (MOBILE_DEVICE) r = scaleMobileUiRect(r, 1.08, 1.22);
   buttons[name] = r;
   roundedRect(r, rgb(fill), stroke ? rgb(stroke) : null, stroke ? 3 : 1, 10);
-  fitText(label, r, size);
+  fitText(label, r, MOBILE_DEVICE ? size * 1.12 : size);
+}
+
+function scaleMobileUiRect(r, factor = 1.1, verticalFactor = factor) {
+  if (!MOBILE_DEVICE) return r;
+  const width = r.w * factor;
+  const height = r.h * verticalFactor;
+  return rect(r.x + (r.w - width) / 2, r.y + (r.h - height) / 2, width, height);
+}
+
+function mobileScreenHeight() {
+  if (!MOBILE_DEVICE) return HEIGHT;
+  return Number(canvas.dataset.logicalHeight) || canvas.height / Math.max(1, canvas.width / WIDTH);
 }
 
 function drawSelectionTitle(label, fillColor, borderColor) {
-  const titleRect = centeredRect(WIDTH / 2, 60, 500, 70);
+  const titleRect = centeredRect(WIDTH / 2, MOBILE_DEVICE ? 62 : 60, MOBILE_DEVICE ? 520 : 500, MOBILE_DEVICE ? 76 : 70);
   roundedRect(titleRect, rgb(fillColor), rgb(borderColor), 4, 10);
   const centeredTextArea = rect(titleRect.x, titleRect.y, titleRect.w, titleRect.h);
-  fitText(label, centeredTextArea, 42, WHITE, 24, 10, 3, CARTOON_FONT_FAMILY);
+  fitText(label, centeredTextArea, MOBILE_DEVICE ? 45 : 42, WHITE, 24, 10, 3, CARTOON_FONT_FAMILY);
 }
 
 function drawProfileIconButton() {
-  const size = 54;
-  const button = rect(20, 20, size, size);
+  const size = MOBILE_DEVICE ? 88 : 54;
+  const button = rect(20, MOBILE_DEVICE ? 20 : 20, size, size);
   buttons.profile = button;
   roundedRect(button, rgb(OBSTACLE_MID), null, 1, 10);
   circle(v(button.x + button.w / 2, button.y + button.h * 0.33), button.w * 0.15, rgb(WHITE));
@@ -1746,8 +1767,8 @@ function drawProfileIconButton() {
 }
 
 function drawLeaderboardIconButton() {
-  const size = 54;
-  const button = rect(20, 84, size, size);
+  const size = MOBILE_DEVICE ? 88 : 54;
+  const button = rect(20, MOBILE_DEVICE ? 122 : 84, size, size);
   buttons.leaderboard = button;
   roundedRect(button, rgb(OBSTACLE_MID), null, 1, 10);
   const crown = [
@@ -1780,6 +1801,20 @@ function drawLeaderboardMapPreview(mapIndex, x, y, width, height) {
 
 function drawLeaderboardCard(mapIndex, bounds, scores) {
   drawScorePanel(bounds, "rgba(24,29,39,0.95)", "rgba(255,255,255,0.2)", 11);
+  if (MOBILE_DEVICE) {
+    text(MAPS[mapIndex].name, bounds.x + bounds.w / 2, bounds.y + 17, 21, BEIGE);
+    const previewWidth = Math.min(150, bounds.w * 0.42);
+    const previewHeight = previewWidth * 3 / 4;
+    drawLeaderboardMapPreview(mapIndex, bounds.x + 14, bounds.y + 36, previewWidth, previewHeight);
+    for (let rank = 0; rank < 3; rank += 1) {
+      const rankColors = [[255, 210, 55], [185, 195, 210], [190, 105, 45]];
+      const scoreText = scores[rank] === undefined ? "-" : String(scores[rank]);
+      const rowY = bounds.y + 48 + rank * Math.max(34, (bounds.h - 62) / 3);
+      text(`${rank + 1}.`, bounds.x + 190, rowY, 23, rankColors[rank], "right");
+      text(scoreText, bounds.x + 204, rowY, 25, WHITE, "left");
+    }
+    return;
+  }
   text(MAPS[mapIndex].name, bounds.x + bounds.w / 2, bounds.y + 21, 19, BEIGE);
   drawLeaderboardMapPreview(mapIndex, bounds.x + 49, bounds.y + 36, 130, 97);
   for (let rank = 0; rank < 3; rank += 1) {
@@ -1801,7 +1836,8 @@ function drawLeaderboard() {
   const startX = (WIDTH - totalWidth) / 2;
   for (let index = 0; index < timeOptions.length; index += 1) {
     const duration = timeOptions[index];
-    const tab = rect(startX + index * (tabWidth + tabGap), 108, tabWidth, 38);
+    const tabY = MOBILE_DEVICE ? 160 : 108;
+    const tab = scaleMobileUiRect(rect(startX + index * (tabWidth + tabGap), tabY, tabWidth, 38), 1.08);
     buttons.leaderboardTimes.push([tab, duration]);
     const selected = duration === leaderboardTime;
     roundedRect(tab, rgb(selected ? YELLOW : OBSTACLE_MID), selected ? rgb(WHITE) : null, selected ? 2 : 1, 7);
@@ -1809,7 +1845,19 @@ function drawLeaderboard() {
   }
 
   const allScores = loadTopScores()[leaderboardTime];
-  const cardPositions = [
+  const statsHeight = mobileScreenHeight();
+  const cardHeight = MOBILE_DEVICE ? Math.min(220, statsHeight * 0.17) : 178;
+  const statsTop = MOBILE_DEVICE ? 260 : 170;
+  const statsRowGap = MOBILE_DEVICE ? Math.max(28, (statsHeight - 100 - statsTop - cardHeight * 3) / 2) : 0;
+  const statsRowTwo = statsTop + cardHeight + statsRowGap;
+  const statsRowThree = statsRowTwo + cardHeight + statsRowGap;
+  const cardPositions = MOBILE_DEVICE ? [
+    rect(45, statsTop, 340, cardHeight),
+    rect(415, statsTop, 340, cardHeight),
+    rect(45, statsRowTwo, 340, cardHeight),
+    rect(415, statsRowTwo, 340, cardHeight),
+    rect(230, statsRowThree, 340, cardHeight),
+  ] : [
     rect(28, 166, 228, 178),
     rect(286, 166, 228, 178),
     rect(544, 166, 228, 178),
@@ -1856,27 +1904,33 @@ function drawMenu() {
   drawCurrentBg("menu");
   drawProfileIconButton();
   drawLeaderboardIconButton();
-  const startRect = centeredRect(WIDTH / 2, 138, 200, 60);
+  const screenHeight = mobileScreenHeight();
+  const startY = MOBILE_DEVICE ? Math.max(280, screenHeight * 0.3) : 138;
+  const promptY = MOBILE_DEVICE ? startY + 72 : 184;
+  const timeTitleY = MOBILE_DEVICE ? screenHeight * 0.47 : 293;
+  const timeButtonsY = MOBILE_DEVICE ? timeTitleY + 92 : 343;
+  const settingsY = MOBILE_DEVICE ? screenHeight * 0.7 : 490;
+  const startRect = centeredRect(WIDTH / 2, startY, MOBILE_DEVICE ? 280 : 200, MOBILE_DEVICE ? 92 : 60);
   buttons.start = startRect;
   roundedRect(startRect, rgb(KHAKI), rgb(WHITE), 3, 10);
   fitText("START", startRect, 72, WHITE, 10, 6, 4);
-  text("Press Space to Start", WIDTH / 2, 184, 18, WHITE);
-  text("Choose your Time", WIDTH / 2, 293, 36, BEIGE);
+  if (!MOBILE_DEVICE) text("Press Space to Start", WIDTH / 2, promptY, 18, WHITE);
+  text("Choose your Time", WIDTH / 2, timeTitleY, MOBILE_DEVICE ? 44 : 36, BEIGE);
   const total = timeOptions.length * 60 + (timeOptions.length - 1) * 20;
   const startX = (WIDTH - total) / 2;
   for (let i = 0; i < timeOptions.length; i += 1) {
     const t = timeOptions[i];
-    const r = rect(startX + i * 80, 343, 60, 40);
+    const r = scaleMobileUiRect(rect(startX + i * 80, timeButtonsY, 60, 40), 1.1, 1.35);
     buttons.time.push([r, t]);
     roundedRect(r, rgb(t === selectedTime ? YELLOW : DARK_BROWN), null, 1, 5);
     fitText(t < 60 ? `${t}s` : "1m", r, 36, t === selectedTime ? DARK_BROWN : WHITE, 6, 4, 3);
   }
-  drawButton("selectCar", centeredRect(WIDTH / 2 - 100, 490, 180, 50), "Car Settings", OBSTACLE_MID, 28);
-  drawButton("selectMap", centeredRect(WIDTH / 2 + 100, 490, 180, 50), "Map Settings", OBSTACLE_MID, 28);
+  drawButton("selectCar", centeredRect(WIDTH / 2 - 145, settingsY, MOBILE_DEVICE ? 260 : 180, MOBILE_DEVICE ? 72 : 50), "Car Settings", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
+  drawButton("selectMap", centeredRect(WIDTH / 2 + 145, settingsY, MOBILE_DEVICE ? 260 : 180, MOBILE_DEVICE ? 72 : 50), "Map Settings", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
 }
 
 function drawBackButton() {
-  buttons.back = rect(WIDTH - 120, 20, 100, 40);
+  buttons.back = MOBILE_DEVICE ? rect(WIDTH - 108, 18, 88, 88) : rect(WIDTH - 120, 20, 100, 40);
   roundedRect(buttons.back, rgb(RELAXED_RED), null, 1, 8);
   fitText("Back", buttons.back, 28);
 }
@@ -1885,11 +1939,13 @@ function drawCarSelect() {
   buttons.carSelect = [];
   drawCurrentBg("garage");
   drawSelectionTitle("Choose your Ride", [32, 52, 78], [105, 185, 235]);
+  const screenHeight = mobileScreenHeight();
+  const carRowY = MOBILE_DEVICE ? screenHeight * 0.43 : HEIGHT / 2 - 20;
   const original = selectedCar;
   for (let i = 0; i < CAR_MODELS.length; i += 1) {
     const model = CAR_MODELS[i];
     const x = WIDTH / 2 + (i - 2) * 150;
-    const y = HEIGHT / 2 - 20 + Math.abs(i - 2) * 40;
+    const y = MOBILE_DEVICE ? carRowY + Math.abs(i - 2) * 55 : HEIGHT / 2 - 20 + Math.abs(i - 2) * 40;
     const r = centeredRect(x, y, 140, 140);
     buttons.carSelect.push([r, i]);
     ctx.beginPath();
@@ -1906,8 +1962,9 @@ function drawCarSelect() {
     text(model.name, x, y + 90, 24);
   }
   selectedCar = original;
-  drawButton("carColor", centeredRect(WIDTH / 2 - 120, HEIGHT - 100, 160, 50), "Car Colour", OBSTACLE_MID, 28);
-  drawButton("boostColor", centeredRect(WIDTH / 2 + 120, HEIGHT - 100, 160, 50), "Boost Colour", OBSTACLE_MID, 28);
+  const colorButtonY = MOBILE_DEVICE ? screenHeight * 0.72 : HEIGHT - 100;
+  drawButton("carColor", centeredRect(WIDTH / 2 - 165, colorButtonY, MOBILE_DEVICE ? 280 : 160, MOBILE_DEVICE ? 92 : 50), "Car Colour", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
+  drawButton("boostColor", centeredRect(WIDTH / 2 + 165, colorButtonY, MOBILE_DEVICE ? 280 : 160, MOBILE_DEVICE ? 92 : 50), "Boost Colour", OBSTACLE_MID, MOBILE_DEVICE ? 32 : 28);
   drawBackButton();
 }
 
@@ -1917,7 +1974,7 @@ function colorsEqual(a, b) {
 
 function drawColorGrid(selected, options = {}) {
   const cols = options.cols || 12;
-  const box = options.box || 32;
+  const box = options.box || (MOBILE_DEVICE ? 36 : 32);
   const gap = options.gap ?? 5;
   const totalWidth = cols * box + (cols - 1) * gap;
   const startX = options.startX ?? (WIDTH - totalWidth) / 2;
@@ -1933,21 +1990,57 @@ function drawColorGrid(selected, options = {}) {
   }
 }
 
+function mobilePaletteOptions(buttonKey = "colors") {
+  const cols = 12;
+  const box = 48;
+  const gap = 7;
+  const rows = Math.ceil(FULL_PALETTE.length / cols);
+  const paletteHeight = rows * box + (rows - 1) * gap;
+  return {
+    buttonKey,
+    cols,
+    box,
+    gap,
+    startY: mobileScreenHeight() - 70 - paletteHeight,
+  };
+}
+
+function drawMobileCarColorPreview(boosting = false) {
+  const previewY = mobileScreenHeight() * 0.38;
+  ctx.save();
+  ctx.translate(WIDTH / 2, previewY);
+  ctx.scale(3.2, 3.2);
+  ctx.translate(-WIDTH / 2, -180);
+  if (boosting) drawFlame();
+  drawCar(v(WIDTH / 2, 180), -90, boosting);
+  ctx.restore();
+}
+
 function drawColorSelect() {
   drawCurrentBg("garage");
   drawBackButton();
   drawSelectionTitle("Choose Car Colour", [32, 52, 78], [105, 185, 235]);
-  drawCar(v(WIDTH / 2, 180), -90);
-  drawColorGrid(selectedColor);
+  if (MOBILE_DEVICE) {
+    drawMobileCarColorPreview(false);
+    drawColorGrid(selectedColor, mobilePaletteOptions());
+  } else {
+    drawCar(v(WIDTH / 2, 180), -90);
+    drawColorGrid(selectedColor);
+  }
 }
 
 function drawBoostColorSelect() {
   drawCurrentBg("garage");
   drawBackButton();
   drawSelectionTitle("Choose Boost Colour", [32, 52, 78], [105, 185, 235]);
-  drawFlame();
-  drawCar(v(WIDTH / 2, 180), -90, true);
-  drawColorGrid(selectedBoostColor);
+  if (MOBILE_DEVICE) {
+    drawMobileCarColorPreview(true);
+    drawColorGrid(selectedBoostColor, mobilePaletteOptions());
+  } else {
+    drawFlame();
+    drawCar(v(WIDTH / 2, 180), -90, true);
+    drawColorGrid(selectedBoostColor);
+  }
 }
 
 function drawMapPreview(x, y, w, h) {
@@ -1965,54 +2058,94 @@ function drawMapPreview(x, y, w, h) {
 }
 
 function drawMapSelector(buttonKey, label, value, centerY) {
-  const previous = rect(370, centerY - 17, 34, 34);
-  const valueRect = rect(414, centerY - 17, 172, 34);
-  const next = rect(596, centerY - 17, 34, 34);
+  const previous = MOBILE_DEVICE ? rect(300, centerY - 40, 94, 80) : rect(370, centerY - 17, 34, 34);
+  const valueRect = MOBILE_DEVICE ? rect(404, centerY - 32, 192, 64) : rect(414, centerY - 17, 172, 34);
+  const next = MOBILE_DEVICE ? rect(606, centerY - 40, 94, 80) : rect(596, centerY - 17, 34, 34);
   buttons[buttonKey] = [[previous, -1], [next, 1]];
-  text(`${label}:`, 170, centerY, 20, BEIGE, "left");
-  fitText(value, valueRect, 20, WHITE, 6, 4);
+  text(`${label}:`, MOBILE_DEVICE ? 72 : 170, centerY, MOBILE_DEVICE ? 30 : 20, BEIGE, "left");
+  fitText(value, valueRect, MOBILE_DEVICE ? 30 : 20, WHITE, 6, 4);
   roundedRect(previous, rgb(OBSTACLE_MID), null, 1, 5);
   roundedRect(next, rgb(OBSTACLE_MID), null, 1, 5);
-  fitText("<", previous, 27, WHITE, 4, 4);
-  fitText(">", next, 27, WHITE, 4, 4);
+  fitText("<", previous, MOBILE_DEVICE ? 52 : 27, WHITE, 4, 4);
+  fitText(">", next, MOBILE_DEVICE ? 52 : 27, WHITE, 4, 4);
+}
+
+function getMobileMapSettingsLayout() {
+  const screenHeight = mobileScreenHeight();
+  const bottomButtonY = screenHeight - 105;
+  const selectorGap = 110;
+  const selectorBottom = bottomButtonY - 170;
+  const selectorTop = selectorBottom - selectorGap * 2;
+  const titleBottom = 100;
+  const previewHeight = 375;
+  const previewBottomLimit = selectorTop - 40;
+  const previewY = titleBottom + (previewBottomLimit - titleBottom - previewHeight) / 2;
+  return {
+    screenHeight,
+    bottomButtonY,
+    selectorGap,
+    selectorTop,
+    preview: rect(150, previewY, 500, previewHeight),
+  };
 }
 
 function drawMapSettings() {
   drawCurrentBg("map");
   drawSelectionTitle("Map Selection", [32, 52, 78], [105, 185, 235]);
-  drawMapPreview(250, 131, 300, 225);
-  drawMapSelector("mapNav", "Obstacle Layout", MAPS[selectedMapIndex].name, 409);
+  const mobileLayout = MOBILE_DEVICE ? getMobileMapSettingsLayout() : null;
+  const bottomButtonY = MOBILE_DEVICE ? mobileLayout.bottomButtonY : 555;
+  const selectorGap = MOBILE_DEVICE ? mobileLayout.selectorGap : 42;
+  const selectorTop = MOBILE_DEVICE ? mobileLayout.selectorTop : 409;
+  if (MOBILE_DEVICE) {
+    const preview = mobileLayout.preview;
+    drawMapPreview(preview.x, preview.y, preview.w, preview.h);
+  } else {
+    drawMapPreview(250, 131, 300, 225);
+  }
+  drawMapSelector("mapNav", "Obstacle Layout", MAPS[selectedMapIndex].name, selectorTop);
   const shapeName = obstacleShape[0].toUpperCase() + obstacleShape.slice(1);
-  drawMapSelector("shapeNav", "Obstacle Shape", shapeName, 451);
-  drawMapSelector("themeNav", "Theme", THEMES[selectedThemeIndex].name, 493);
-  drawButton("mapColors", centeredRect(270, 555, 230, 50), "Theme Color", OBSTACLE_MID, 27);
-  drawButton("obstacleSettings", centeredRect(530, 555, 230, 50), "Obstacle Color", OBSTACLE_MID, 27);
+  drawMapSelector("shapeNav", "Obstacle Shape", shapeName, selectorTop + selectorGap);
+  drawMapSelector("themeNav", "Theme", THEMES[selectedThemeIndex].name, selectorTop + selectorGap * 2);
+  drawButton("mapColors", centeredRect(270, bottomButtonY, 230, MOBILE_DEVICE ? 64 : 50), "Theme Color", OBSTACLE_MID, 27);
+  drawButton("obstacleSettings", centeredRect(530, bottomButtonY, 230, MOBILE_DEVICE ? 64 : 50), "Obstacle Color", OBSTACLE_MID, 27);
   drawBackButton();
 }
 
 function drawMapColorSettings() {
   drawCurrentBg("map");
   drawSelectionTitle("Theme Color", [32, 52, 78], [105, 185, 235]);
-  drawMapPreview(290, 115, 220, 165);
+  if (MOBILE_DEVICE) {
+    const preview = getMobileMapSettingsLayout().preview;
+    drawMapPreview(preview.x, preview.y, preview.w, preview.h);
+  } else drawMapPreview(290, 115, 220, 165);
   const theme = THEMES[selectedThemeIndex];
-  drawColorGrid(theme.structure === "neon" ? theme.lineColor : theme.bg, { buttonKey: "mapBackgroundColors" });
+  drawColorGrid(
+    theme.structure === "neon" ? theme.lineColor : theme.bg,
+    MOBILE_DEVICE ? mobilePaletteOptions("mapBackgroundColors") : { buttonKey: "mapBackgroundColors" },
+  );
   drawBackButton();
 }
 
 function drawObstacleSettings() {
   drawCurrentBg("map");
   drawSelectionTitle("Obstacle Color", [32, 52, 78], [105, 185, 235]);
-  drawMapPreview(290, 115, 220, 165);
-  drawColorGrid(obstacleColor);
+  if (MOBILE_DEVICE) {
+    const preview = getMobileMapSettingsLayout().preview;
+    drawMapPreview(preview.x, preview.y, preview.w, preview.h);
+    drawColorGrid(obstacleColor, mobilePaletteOptions());
+  } else {
+    drawMapPreview(290, 115, 220, 165);
+    drawColorGrid(obstacleColor);
+  }
   drawBackButton();
 }
 
 function drawBackgroundCategories() {
   buttons.bgCategories = [];
   drawCurrentBg("menu");
-  text("Background Settings", WIDTH / 2, 80, 72);
+  text("Background Settings", WIDTH / 2, MOBILE_DEVICE ? 38 : 80, MOBILE_DEVICE ? 52 : 72);
   ["menu", "garage", "map", "score"].forEach((key, i) => {
-    const r = centeredRect(WIDTH / 2, 180 + i * 80, 300, 60);
+    const r = centeredRect(WIDTH / 2, 180 + i * 80, MOBILE_DEVICE ? 330 : 300, MOBILE_DEVICE ? 66 : 60);
     buttons.bgCategories.push([r, key]);
     roundedRect(r, rgb(OBSTACLE_MID), null, 1, 10);
     fitText(BG_CATEGORIES[key].name, r, 36);
@@ -2025,7 +2158,7 @@ function drawBackgroundSelectSpecific() {
   buttons.bgPageNav = [];
   drawCurrentBg(currentBgCategory);
   const cat = BG_CATEGORIES[currentBgCategory];
-  text(`${cat.name} Style`, WIDTH / 2, 80, 72);
+  text(`${cat.name} Style`, WIDTH / 2, MOBILE_DEVICE ? 38 : 80, MOBILE_DEVICE ? 52 : 72);
   const previewW = 180, previewH = 130, gap = 25, numCols = 3;
   const startX = (WIDTH - (numCols * previewW + (numCols - 1) * gap)) / 2;
   const pageCount = Math.ceil(cat.options.length / BACKGROUNDS_PER_PAGE);
@@ -2047,8 +2180,8 @@ function drawBackgroundSelectSpecific() {
     roundedRect(r, null, rgb(i === cat.selected ? YELLOW : WHITE), i === cat.selected ? 3 : 1, 5);
     fitText(bg[0], rect(r.x, r.y + r.h + 3, r.w, 26), 24, WHITE, 2, 1);
   });
-  const previous = centeredRect(WIDTH / 2 - 90, 560, 50, 36);
-  const next = centeredRect(WIDTH / 2 + 90, 560, 50, 36);
+  const previous = centeredRect(WIDTH / 2 - 90, 560, MOBILE_DEVICE ? 58 : 50, MOBILE_DEVICE ? 42 : 36);
+  const next = centeredRect(WIDTH / 2 + 90, 560, MOBILE_DEVICE ? 58 : 50, MOBILE_DEVICE ? 42 : 36);
   buttons.bgPageNav.push([previous, -1], [next, 1]);
   roundedRect(previous, rgb(OBSTACLE_MID), null, 1, 6);
   roundedRect(next, rgb(OBSTACLE_MID), null, 1, 6);
@@ -2075,6 +2208,15 @@ function drawScoreRankGlow(position, rank, elapsed) {
   gradient.addColorStop(1, rgb(color, 0));
 
   ctx.save();
+  if (MOBILE_DEVICE) {
+    ctx.globalCompositeOperation = "source-over";
+    ctx.globalAlpha = 0.72;
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   ctx.globalCompositeOperation = "lighter";
   ctx.fillStyle = gradient;
   ctx.beginPath();
@@ -2152,6 +2294,10 @@ function drawScoreboard() {
     pendingScore = null;
   }
 
+  const scoreboardOffset = MOBILE_DEVICE ? (mobileScreenHeight() - HEIGHT) / 2 : 0;
+  ctx.save();
+  if (scoreboardOffset) ctx.translate(0, scoreboardOffset);
+
   text("Score", WIDTH / 2, 42, 58);
   const modePanel = rect(170, 78, 460, 88);
   drawScorePanel(modePanel, "rgba(32,38,50,0.94)", "rgba(232,194,150,0.48)");
@@ -2217,8 +2363,16 @@ function drawScoreboard() {
       text("POINTS", movingBounds.x + movingBounds.w - 24, scorePosition.y, 17, [145, 150, 165], "right");
     }
   }
-  drawButton("replay", rect(50, HEIGHT - 80, 200, 50), "Replay", OBSTACLE_MID, 36);
-  drawButton("home", rect(WIDTH - 250, HEIGHT - 80, 200, 50), "Home", OBSTACLE_MID, 36);
+  if (MOBILE_DEVICE) {
+    ctx.restore();
+    const actionY = mobileScreenHeight() - 135;
+    drawButton("replay", centeredRect(230, actionY, 280, 96), "Replay", OBSTACLE_MID, 42);
+    drawButton("home", centeredRect(570, actionY, 280, 96), "Home", OBSTACLE_MID, 42);
+  } else {
+    drawButton("replay", rect(50, HEIGHT - 80, 200, 50), "Replay", OBSTACLE_MID, 36);
+    drawButton("home", rect(WIDTH - 250, HEIGHT - 80, 200, 50), "Home", OBSTACLE_MID, 36);
+    ctx.restore();
+  }
 }
 
 function updateGame() {
@@ -2281,10 +2435,15 @@ function drawFrame(now) {
   const dt = Math.min(50, now - lastFrame);
   lastFrame = now;
   bgTick += dt;
-  ctx.clearRect(0, 0, WIDTH, HEIGHT);
+  const renderScale = Math.max(1, canvas.width / WIDTH);
+  ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
+  ctx.clearRect(0, 0, WIDTH, canvas.height / renderScale);
 
   if (state === "menu") drawMenu();
-  else if (state === "profile") drawProfileScreen();
+  else if (state === "profile") {
+    if (MOBILE_DEVICE) drawCurrentBg("menu");
+    else drawProfileScreen();
+  }
   else if (state === "leaderboard") drawLeaderboard();
   else if (state === "car_select") drawCarSelect();
   else if (state === "color_select") drawColorSelect();
@@ -2305,7 +2464,9 @@ function drawFrame(now) {
 
 function canvasPoint(event) {
   const r = canvas.getBoundingClientRect();
-  return v((event.clientX - r.left) * WIDTH / r.width, (event.clientY - r.top) * HEIGHT / r.height);
+  const interactionHeight = MOBILE_DEVICE && state !== "game" && state !== "countdown" ? mobileScreenHeight() : HEIGHT;
+  const logicalY = (event.clientY - r.top) * interactionHeight / r.height;
+  return v((event.clientX - r.left) * WIDTH / r.width, logicalY);
 }
 
 canvas.addEventListener("pointerdown", (event) => {

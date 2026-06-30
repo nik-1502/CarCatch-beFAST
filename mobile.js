@@ -1,6 +1,17 @@
 const coarsePointer = window.matchMedia("(pointer: coarse)");
 const mobileViewport = window.matchMedia("(max-width: 1024px)");
-const isMobile = navigator.maxTouchPoints > 0 && (coarsePointer.matches || mobileViewport.matches);
+const narrowMobilePreview = window.matchMedia("(max-width: 700px)");
+const portraitMobilePreview = window.matchMedia("(max-width: 1024px) and (orientation: portrait)");
+const detectMobile = () => (navigator.maxTouchPoints > 0 && (coarsePointer.matches || mobileViewport.matches))
+  || narrowMobilePreview.matches
+  || portraitMobilePreview.matches;
+const isMobile = detectMobile();
+
+for (const mediaQuery of [coarsePointer, mobileViewport, narrowMobilePreview, portraitMobilePreview]) {
+  mediaQuery.addEventListener("change", () => {
+    if (detectMobile() !== isMobile) window.location.reload();
+  });
+}
 
 if (isMobile) {
   document.documentElement.classList.add("mobile-device");
@@ -16,6 +27,7 @@ if (isMobile) {
   const stick = document.querySelector(".joystick-stick");
   const authPanel = document.querySelector(".mobile-auth");
   let activePointer = null;
+  let canvasLayoutMode = "";
 
   // Keep native two-finger zoom, while `touch-action: manipulation` removes
   // the browser's double-tap zoom gesture on mobile.
@@ -33,7 +45,10 @@ if (isMobile) {
 
   window.visualViewport?.addEventListener("resize", restoreUnzoomedViewport);
   window.visualViewport?.addEventListener("scroll", restoreUnzoomedViewport);
-  window.addEventListener("orientationchange", restoreUnzoomedViewport);
+  window.addEventListener("orientationchange", () => {
+    canvasLayoutMode = "";
+    restoreUnzoomedViewport();
+  });
 
   function updateJoystick(clientX, clientY) {
     const bounds = joystick.getBoundingClientRect();
@@ -154,6 +169,22 @@ if (isMobile) {
     const state = window.CarCatch?.getState() || "menu";
     const gameplay = state === "game" || state === "countdown";
     shell.classList.toggle("mobile-gameplay", gameplay);
+    const nextCanvasLayoutMode = gameplay ? "gameplay" : "portrait-ui";
+    if (canvasLayoutMode !== nextCanvasLayoutMode) {
+      const logicalCanvasHeight = gameplay
+        ? 600
+        : Math.max(600, Math.round(800 * shell.clientHeight / Math.max(1, shell.clientWidth)));
+      const deviceScale = Math.min(window.devicePixelRatio || 1, 2.5);
+      const renderScale = Math.max(1, Math.min(2, shell.clientWidth * deviceScale / 800));
+      const desiredCanvasWidth = Math.round(800 * renderScale);
+      const desiredCanvasHeight = Math.round(logicalCanvasHeight * renderScale);
+      canvas.dataset.logicalHeight = String(logicalCanvasHeight);
+      if (canvas.width !== desiredCanvasWidth || canvas.height !== desiredCanvasHeight) {
+        canvas.width = desiredCanvasWidth;
+        canvas.height = desiredCanvasHeight;
+      }
+      canvasLayoutMode = nextCanvasLayoutMode;
+    }
     if (!gameplay) releaseJoystick();
 
     const user = window.CarCatch?.getCurrentUser() || null;
