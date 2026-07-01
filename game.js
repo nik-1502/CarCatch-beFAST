@@ -2246,7 +2246,7 @@ function drawMapSelector(buttonKey, label, value, centerY) {
     const valueRect = rect(previous.x + previous.w, group.y, group.w - previous.w - next.w, group.h);
     buttons[buttonKey] = [[previous, -1], [next, 1]];
     text(label, WIDTH / 2, centerY - 66, 27, BEIGE);
-    roundedRect(group, rgb(DARK_BROWN), rgb(DARK_BROWN), 2, 9);
+    roundedRect(group, "rgb(50,50,55)", "rgb(50,50,55)", 2, 9);
     fitText("<", previous, 44, WHITE, 4, 4);
     fitText(value, valueRect, 30, WHITE, 8, 4);
     fitText(">", next, 44, WHITE, 4, 4);
@@ -2267,13 +2267,16 @@ function drawMapSelector(buttonKey, label, value, centerY) {
 function getMobileMapSettingsLayout() {
   const screenHeight = mobileScreenHeight();
   const bottomButtonY = screenHeight - 105;
-  const selectorGap = 130;
-  const selectorBottom = bottomButtonY - 145;
-  const selectorTop = selectorBottom - selectorGap * 2;
-  const titleBottom = 100;
+  const selectorGap = 120;
   const previewHeight = 375;
-  const previewBottomLimit = selectorTop - 100;
-  const previewY = titleBottom + (previewBottomLimit - titleBottom - previewHeight) / 2;
+  const previewY = Math.max(120, Math.min(260, screenHeight * 0.16));
+  const previewBottom = previewY + previewHeight;
+  const bottomButtonsTop = bottomButtonY - 44;
+  const availableCenter = (previewBottom + bottomButtonsTop) / 2;
+  // With labels included, the three selector blocks extend from 82 px above
+  // the first field center to 272 px below it. Offset the first center so the
+  // complete group, not just its fields, is centered in the available space.
+  const selectorTop = availableCenter - 95;
   return {
     screenHeight,
     bottomButtonY,
