@@ -160,6 +160,7 @@ const obstacleInnerInset = 9;
 const carCollisionRadius = carLength / 2;
 const timeOptions = [10, 15, 20, 30, 40, 50, 60];
 const flameParticles = [];
+const mobileFlameParticles = [];
 let teleportEffect = null;
 const bgStates = new Map();
 const buttons = {};
@@ -592,6 +593,7 @@ function finishRound() {
     score,
     time: scoreboardTime,
     layout: scoreboardLayout,
+    previousScores: [...topScores],
     rank: getScoreRank(score, topScores),
     endedAt: performance.now(),
     committed: false,
@@ -1544,7 +1546,14 @@ function drawScore(remainingOverride = null) {
   roundedRect(box, "rgb(0,0,0)", rgb(WHITE), 2, 8);
   text(String(score), WIDTH / 2, HEIGHT / 2, 36);
   const remaining = remainingOverride ?? Math.max(0, selectedTime - (performance.now() - gameStartTime) / 1000);
-  text(`${remaining.toFixed(1)}s`, WIDTH - 100, 20, 36, WHITE, "left", "top");
+  if (MOBILE_DEVICE) {
+    const timerBox = centeredRect((WIDTH / 2 + WIDTH) / 2, 40, 154, 58);
+    roundedRect(rect(timerBox.x + 5, timerBox.y + 6, timerBox.w, timerBox.h), "rgba(0,0,0,0.38)", null, 1, 10);
+    roundedRect(timerBox, "rgba(30,33,39,0.94)", "rgb(116,124,136)", 4, 10);
+    text(`${remaining.toFixed(1)}s`, timerBox.x + timerBox.w / 2, timerBox.y + timerBox.h / 2 + 1, 34, WHITE);
+  } else {
+    text(`${remaining.toFixed(1)}s`, WIDTH - 100, 20, 36, WHITE, "left", "top");
+  }
   if (!MOBILE_DEVICE) text("Press ENTER to leave", WIDTH - 20, 60, 24, WHITE, "right", "top");
 }
 
@@ -1653,41 +1662,30 @@ function drawFlame(pos, angle, carType = selectedCar, motionAmount = 0) {
   const rearDistance = ({ 1: 26, 2: 28, 3: 30, 4: 28, 5: 26 })[carType] || 26;
   const rad = angle * Math.PI / 180;
   const origin = v(pos.x - Math.cos(rad) * rearDistance, pos.y - Math.sin(rad) * rearDistance);
-  const lightColor = lighten(selectedBoostColor, 1.55);
+  const lightColor = lighten(selectedBoostColor, 1.4);
+  const maxLength = 49 + Math.max(0, Math.min(1, motionAmount)) * 8;
+
+  mobileFlameParticles.push({
+    distance: 0,
+    speed: 1.5 + Math.random() * 1.5,
+    lateral: (Math.random() - 0.5) * 3,
+    life: randInt(12, 22),
+  });
 
   ctx.save();
   ctx.translate(origin.x, origin.y);
   ctx.rotate(rad);
-  ctx.scale(1 + Math.max(0, Math.min(1, motionAmount)) * (8 / 49), 1);
   ctx.globalCompositeOperation = "lighter";
-
-  ctx.beginPath();
-  ctx.moveTo(3, -8);
-  ctx.bezierCurveTo(-12, -13, -34, -8, -49, 0);
-  ctx.bezierCurveTo(-34, 8, -12, 13, 3, 8);
-  ctx.closePath();
-  ctx.fillStyle = rgb(selectedBoostColor, 0.34);
   ctx.shadowColor = rgb(selectedBoostColor, 0.9);
-  ctx.shadowBlur = 14;
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(2, -5.5);
-  ctx.bezierCurveTo(-12, -8, -27, -5, -41, 0);
-  ctx.bezierCurveTo(-27, 5, -12, 8, 2, 5.5);
-  ctx.closePath();
-  ctx.fillStyle = rgb(selectedBoostColor, 0.82);
   ctx.shadowBlur = 7;
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(1, -2.4);
-  ctx.quadraticCurveTo(-14, -3.5, -29, 0);
-  ctx.quadraticCurveTo(-14, 3.5, 1, 2.4);
-  ctx.closePath();
-  ctx.fillStyle = rgb(lightColor, 0.92);
-  ctx.shadowBlur = 3;
-  ctx.fill();
+  for (let index = mobileFlameParticles.length - 1; index >= 0; index -= 1) {
+    const particle = mobileFlameParticles[index];
+    particle.distance += particle.speed;
+    particle.life -= 1;
+    const radius = Math.max(1, Math.floor(particle.life / 3));
+    circle(v(-Math.min(particle.distance, maxLength), particle.lateral), radius, rgb(particle.life > 8 ? selectedBoostColor : lightColor, 0.88));
+    if (particle.life <= 0 || particle.distance >= maxLength) mobileFlameParticles.splice(index, 1);
+  }
   ctx.restore();
 }
 
@@ -1774,6 +1772,7 @@ function startGame() {
   score = 0;
   collectiblePos = spawnCollectible();
   flameParticles.length = 0;
+  mobileFlameParticles.length = 0;
   physicsAccumulator = 0;
   countdownStartTime = performance.now();
   state = "countdown";
@@ -2219,7 +2218,7 @@ function drawMapSelector(buttonKey, label, value, centerY) {
   const valueRect = MOBILE_PORTRAIT_LAYOUT ? rect(404, centerY - 32, 192, 64) : rect(414, centerY - 17, 172, 34);
   const next = MOBILE_PORTRAIT_LAYOUT ? rect(606, centerY - 40, 94, 80) : rect(596, centerY - 17, 34, 34);
   buttons[buttonKey] = [[previous, -1], [next, 1]];
-  text(`${label}:`, MOBILE_PORTRAIT_LAYOUT ? 72 : 170, centerY, MOBILE_PORTRAIT_LAYOUT ? 30 : 20, BEIGE, "left");
+  text(`${label}:`, MOBILE_PORTRAIT_LAYOUT ? 28 : 170, centerY, MOBILE_PORTRAIT_LAYOUT ? 27 : 20, BEIGE, "left");
   fitText(value, valueRect, MOBILE_PORTRAIT_LAYOUT ? 30 : 20, WHITE, 6, 4);
   roundedRect(previous, rgb(OBSTACLE_MID), null, 1, 5);
   roundedRect(next, rgb(OBSTACLE_MID), null, 1, 5);
@@ -2460,6 +2459,11 @@ function drawScoreboard() {
   const scoreboardOffset = MOBILE_PORTRAIT_LAYOUT ? (mobileScreenHeight() - HEIGHT) / 2 : 0;
   ctx.save();
   if (scoreboardOffset) ctx.translate(0, scoreboardOffset);
+  if (MOBILE_DEVICE) {
+    ctx.translate(WIDTH / 2, HEIGHT / 2);
+    ctx.scale(1.12, 1.12);
+    ctx.translate(-WIDTH / 2, -HEIGHT / 2);
+  }
 
   text("Score", WIDTH / 2, 42, 58);
   const modePanel = rect(170, 78, 460, 88);
@@ -2470,7 +2474,7 @@ function drawScoreboard() {
   const rankingPanel = rect(180, 182, 440, 232);
   drawScorePanel(rankingPanel);
   text("TOP 3", WIDTH / 2, 207, 25, KHAKI);
-  const topScores = loadTopScores()[scoreboardTime][scoreboardLayout];
+  const topScores = pendingScore?.previousScores || loadTopScores()[scoreboardTime][scoreboardLayout];
   const pendingElapsed = pendingScore ? performance.now() - pendingScore.endedAt : 0;
   const qualifies = pendingScore?.rank !== null && pendingScore?.rank !== undefined;
   const moveProgressRaw = qualifies ? Math.max(0, Math.min(1, (pendingElapsed - 2500) / 1150)) : 0;
@@ -2526,15 +2530,14 @@ function drawScoreboard() {
       text("POINTS", movingBounds.x + movingBounds.w - 24, scorePosition.y, 17, [145, 150, 165], "right");
     }
   }
+  ctx.restore();
   if (MOBILE_PORTRAIT_LAYOUT) {
-    ctx.restore();
     const actionY = mobileScreenHeight() - 135;
     drawButton("replay", centeredRect(230, actionY, 280, 96), "Replay", OBSTACLE_MID, 42);
     drawButton("home", centeredRect(570, actionY, 280, 96), "Home", OBSTACLE_MID, 42);
   } else {
     drawButton("replay", rect(50, HEIGHT - 80, 200, 50), "Replay", OBSTACLE_MID, 36);
     drawButton("home", rect(WIDTH - 250, HEIGHT - 80, 200, 50), "Home", OBSTACLE_MID, 36);
-    ctx.restore();
   }
 }
 
