@@ -1657,8 +1657,7 @@ function drawFlame(pos, angle, carType = selectedCar, motionAmount = 0) {
   const rearDistance = ({ 1: 26, 2: 28, 3: 30, 4: 28, 5: 26 })[carType] || 26;
   const rad = angle * Math.PI / 180;
   const origin = v(pos.x - Math.cos(rad) * rearDistance, pos.y - Math.sin(rad) * rearDistance);
-  const lightColor = lighten(selectedBoostColor, 1.4);
-  const maxLength = 49 + Math.max(0, Math.min(1, motionAmount)) * 8;
+  const maxLength = 52 + Math.max(0, Math.min(1, motionAmount)) * 8;
 
   mobileFlameParticles.push({
     distance: 0,
@@ -1670,15 +1669,14 @@ function drawFlame(pos, angle, carType = selectedCar, motionAmount = 0) {
   ctx.save();
   ctx.translate(origin.x, origin.y);
   ctx.rotate(rad);
-  ctx.globalCompositeOperation = "lighter";
-  ctx.shadowColor = rgb(selectedBoostColor, 0.9);
-  ctx.shadowBlur = 7;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
   for (let index = mobileFlameParticles.length - 1; index >= 0; index -= 1) {
     const particle = mobileFlameParticles[index];
     particle.distance += particle.speed;
     particle.life -= 1;
-    const radius = Math.max(1, Math.floor(particle.life / 3));
-    circle(v(-Math.min(particle.distance, maxLength), particle.lateral), radius, rgb(particle.life > 8 ? selectedBoostColor : lightColor, 0.88));
+    const radius = Math.max(1, Math.floor(particle.life / 3) + 1);
+    circle(v(-Math.min(particle.distance, maxLength), particle.lateral), radius, rgb(selectedBoostColor));
     if (particle.life <= 0 || particle.distance >= maxLength) mobileFlameParticles.splice(index, 1);
   }
   ctx.restore();
