@@ -712,7 +712,10 @@ function spawnCollectible() {
     const behindMobileScore = MOBILE_DEVICE
       && Math.abs(pos.x - WIDTH / 2) < 120
       && Math.abs(pos.y - HEIGHT / 2) < 90;
-    if (!behindMobileScore && obstacles.every((o) => dist(pos, o) >= radius + 40)) return pos;
+    const behindMobileTimer = MOBILE_DEVICE
+      && Math.abs(pos.x - WIDTH / 2) < 105
+      && Math.abs(pos.y - HEIGHT * 0.75) < 60;
+    if (!behindMobileScore && !behindMobileTimer && obstacles.every((o) => dist(pos, o) >= radius + 40)) return pos;
   }
 }
 
@@ -1547,7 +1550,7 @@ function drawScore(remainingOverride = null) {
   text(String(score), WIDTH / 2, HEIGHT / 2, 36);
   const remaining = remainingOverride ?? Math.max(0, selectedTime - (performance.now() - gameStartTime) / 1000);
   if (MOBILE_DEVICE) {
-    const timerBox = centeredRect((WIDTH / 2 + WIDTH) / 2, 40, 154, 58);
+    const timerBox = centeredRect(WIDTH / 2, (HEIGHT / 2 + HEIGHT) / 2, 154, 58);
     roundedRect(rect(timerBox.x + 5, timerBox.y + 6, timerBox.w, timerBox.h), "rgba(0,0,0,0.38)", null, 1, 10);
     roundedRect(timerBox, "rgba(30,33,39,0.94)", "rgb(116,124,136)", 4, 10);
     text(`${remaining.toFixed(1)}s`, timerBox.x + timerBox.w / 2, timerBox.y + timerBox.h / 2 + 1, 34, WHITE);
@@ -2104,8 +2107,8 @@ function drawCarSelect() {
   }
   selectedCar = original;
   const colorButtonY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.72 : HEIGHT - 100;
-  drawButton("carColor", centeredRect(WIDTH / 2 - (MOBILE_PORTRAIT_LAYOUT ? 165 : 120), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 280 : 160, MOBILE_PORTRAIT_LAYOUT ? 92 : 50), "Car Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
-  drawButton("boostColor", centeredRect(WIDTH / 2 + (MOBILE_PORTRAIT_LAYOUT ? 165 : 120), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 280 : 160, MOBILE_PORTRAIT_LAYOUT ? 92 : 50), "Boost Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
+  drawButton("carColor", centeredRect(WIDTH / 2 - (MOBILE_PORTRAIT_LAYOUT ? 145 : 100), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 260 : 180, MOBILE_PORTRAIT_LAYOUT ? 72 : 50), "Car Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
+  drawButton("boostColor", centeredRect(WIDTH / 2 + (MOBILE_PORTRAIT_LAYOUT ? 145 : 100), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 260 : 180, MOBILE_PORTRAIT_LAYOUT ? 72 : 50), "Boost Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
   drawBackButton();
 }
 
@@ -2264,8 +2267,11 @@ function drawMapSettings() {
   const shapeName = obstacleShape[0].toUpperCase() + obstacleShape.slice(1);
   drawMapSelector("shapeNav", "Obstacle Shape", shapeName, selectorTop + selectorGap);
   drawMapSelector("themeNav", "Theme", THEMES[selectedThemeIndex].name, selectorTop + selectorGap * 2);
-  drawButton("mapColors", centeredRect(270, bottomButtonY, 230, MOBILE_PORTRAIT_LAYOUT ? 64 : 50), "Theme Color", OBSTACLE_MID, 27);
-  drawButton("obstacleSettings", centeredRect(530, bottomButtonY, 230, MOBILE_PORTRAIT_LAYOUT ? 64 : 50), "Obstacle Color", OBSTACLE_MID, 27);
+  const settingsButtonOffset = MOBILE_DEVICE ? (MOBILE_PORTRAIT_LAYOUT ? 145 : 100) : 130;
+  const settingsButtonWidth = MOBILE_DEVICE ? (MOBILE_PORTRAIT_LAYOUT ? 260 : 180) : 230;
+  const settingsButtonHeight = MOBILE_PORTRAIT_LAYOUT ? 72 : 50;
+  drawButton("mapColors", centeredRect(WIDTH / 2 - settingsButtonOffset, bottomButtonY, settingsButtonWidth, settingsButtonHeight), "Theme Color", OBSTACLE_MID, 27);
+  drawButton("obstacleSettings", centeredRect(WIDTH / 2 + settingsButtonOffset, bottomButtonY, settingsButtonWidth, settingsButtonHeight), "Obstacle Color", OBSTACLE_MID, 27);
   drawBackButton();
 }
 
@@ -2506,7 +2512,7 @@ function drawScoreboard() {
   ctx.restore();
 
   if (pendingScore) {
-    const startBounds = rect(245, 430, 310, 60);
+    const startBounds = rect(210, 430, 380, 48);
     if (!qualifies || moveProgressRaw === 0) {
       drawScorePanel(startBounds, "rgba(28,34,46,0.96)", "rgba(105,185,235,0.5)", 10);
       const scoreY = startBounds.y + startBounds.h / 2;
@@ -2537,12 +2543,17 @@ function drawScoreboard() {
   ctx.restore();
   if (MOBILE_PORTRAIT_LAYOUT) {
     const actionY = mobileScreenHeight() - 135;
-    drawButton("replay", centeredRect(230, actionY, 280, 96), "Replay", OBSTACLE_MID, 42);
-    drawButton("home", centeredRect(570, actionY, 280, 96), "Home", OBSTACLE_MID, 42);
+    drawButton("replay", centeredRect(255, actionY, 260, 72), "Replay", OBSTACLE_MID, 36);
+    drawButton("home", centeredRect(545, actionY, 260, 72), "Home", OBSTACLE_MID, 36);
   } else {
     const actionY = MOBILE_DEVICE ? HEIGHT - 68 : HEIGHT - 80;
-    drawButton("replay", rect(50, actionY, 200, 50), "Replay", OBSTACLE_MID, 36);
-    drawButton("home", rect(WIDTH - 250, actionY, 200, 50), "Home", OBSTACLE_MID, 36);
+    if (MOBILE_DEVICE) {
+      drawButton("replay", centeredRect(300, actionY + 25, 180, 50), "Replay", OBSTACLE_MID, 36);
+      drawButton("home", centeredRect(500, actionY + 25, 180, 50), "Home", OBSTACLE_MID, 36);
+    } else {
+      drawButton("replay", rect(50, actionY, 200, 50), "Replay", OBSTACLE_MID, 36);
+      drawButton("home", rect(WIDTH - 250, actionY, 200, 50), "Home", OBSTACLE_MID, 36);
+    }
   }
 }
 
@@ -2597,10 +2608,9 @@ function drawCountdown() {
   const number = String(3 - Math.floor(elapsed));
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  if (!MOBILE_DEVICE) {
-    circle(v(WIDTH / 2, HEIGHT / 2), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
-    text(number, WIDTH / 2, HEIGHT / 2 + 2, 96, WHITE);
-  }
+  const countdownY = MOBILE_DEVICE ? HEIGHT / 4 : HEIGHT / 2;
+  circle(v(WIDTH / 2, countdownY), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
+  text(number, WIDTH / 2, countdownY + 2, 96, WHITE);
 }
 
 function drawFrame(now) {
@@ -2805,7 +2815,6 @@ window.addEventListener("keyup", (event) => {
 
 window.CarCatch = {
   getState: () => state,
-  getCountdownValue: () => state === "countdown" ? String(Math.max(1, 3 - Math.floor((performance.now() - countdownStartTime) / 1000))) : "",
   getCurrentUser: () => currentUser ? { key: currentUser.key, username: currentUser.username } : null,
   getProfileStatus: () => profileMessage,
   goToMenu: () => {
