@@ -43,18 +43,41 @@ if (isMobile) {
     });
   }
 
-  window.visualViewport?.addEventListener("resize", restoreUnzoomedViewport);
+  let layoutRefreshTimer = 0;
+  let portraitOrientation = window.matchMedia("(orientation: portrait)").matches;
+
+  function refreshLayoutForViewport() {
+    canvasLayoutMode = "";
+    window.CarCatch?.handleOrientationChange();
+    restoreUnzoomedViewport();
+  }
+
+  function scheduleLayoutRefresh(delay = 120) {
+    window.clearTimeout(layoutRefreshTimer);
+    layoutRefreshTimer = window.setTimeout(refreshLayoutForViewport, delay);
+  }
+
+  window.visualViewport?.addEventListener("resize", () => {
+    restoreUnzoomedViewport();
+    scheduleLayoutRefresh();
+  });
   window.visualViewport?.addEventListener("scroll", restoreUnzoomedViewport);
   window.addEventListener("orientationchange", () => {
-    canvasLayoutMode = "";
-    releaseJoystick();
-    restoreUnzoomedViewport();
-    window.CarCatch?.handleOrientationChange();
-    window.setTimeout(() => {
-      canvasLayoutMode = "";
-      window.CarCatch?.handleOrientationChange();
-      restoreUnzoomedViewport();
-    }, 180);
+    const nextPortraitOrientation = window.matchMedia("(orientation: portrait)").matches;
+    if (nextPortraitOrientation !== portraitOrientation) {
+      portraitOrientation = nextPortraitOrientation;
+      releaseJoystick();
+    }
+    refreshLayoutForViewport();
+    scheduleLayoutRefresh(220);
+  });
+  window.addEventListener("resize", () => {
+    const nextPortraitOrientation = window.matchMedia("(orientation: portrait)").matches;
+    if (nextPortraitOrientation !== portraitOrientation) {
+      portraitOrientation = nextPortraitOrientation;
+      releaseJoystick();
+    }
+    scheduleLayoutRefresh();
   });
 
   function updateJoystick(clientX, clientY) {

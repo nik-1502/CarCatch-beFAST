@@ -2075,30 +2075,58 @@ function drawCarSelect() {
   buttons.carSelect = [];
   drawCurrentBg("garage");
   drawSelectionTitle("Choose your Ride", [32, 52, 78], [105, 185, 235]);
-  const screenHeight = mobileScreenHeight();
-  const carRowY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.43 : HEIGHT / 2 - 20;
   const original = selectedCar;
-  for (let i = 0; i < CAR_MODELS.length; i += 1) {
-    const model = CAR_MODELS[i];
-    const x = WIDTH / 2 + (i - 2) * 150;
-    const y = MOBILE_PORTRAIT_LAYOUT ? carRowY + Math.abs(i - 2) * 55 : HEIGHT / 2 - 20 + Math.abs(i - 2) * 40;
-    const r = centeredRect(x, y, 140, 140);
-    buttons.carSelect.push([r, i]);
+  const displayOrder = MOBILE_DEVICE ? [2, 1, 0, 3, 4] : [0, 1, 2, 3, 4];
+  const colorButtonY = MOBILE_PORTRAIT_LAYOUT ? getMobileMapSettingsLayout().bottomButtonY : HEIGHT - 100;
+
+  function drawCarOption(model, index, x, y, displayScale = 1) {
+    const hitArea = centeredRect(x, y, MOBILE_PORTRAIT_LAYOUT ? 220 : 140, MOBILE_PORTRAIT_LAYOUT ? 190 : 140);
+    buttons.carSelect.push([hitArea, index]);
     ctx.beginPath();
-    ctx.ellipse(x, y, 75, 70, 0, 0, Math.PI * 2);
-    ctx.fillStyle = model.id === original ? "rgb(50,50,55)" : "rgb(30,30,35)";
+    ctx.ellipse(x, y, MOBILE_PORTRAIT_LAYOUT ? 96 : 75, MOBILE_PORTRAIT_LAYOUT ? 88 : 70, 0, 0, Math.PI * 2);
+    ctx.fillStyle = MOBILE_DEVICE || model.id === original ? "rgb(50,50,55)" : "rgb(30,30,35)";
     ctx.fill();
     if (model.id === original) {
       ctx.strokeStyle = rgb(YELLOW);
-      ctx.lineWidth = 3;
+      ctx.lineWidth = MOBILE_PORTRAIT_LAYOUT ? 4 : 3;
       ctx.stroke();
     }
     selectedCar = model.id;
-    drawCar(v(x, y), -90);
-    text(model.name, x, y + 90, 24);
+    if (displayScale === 1) {
+      drawCar(v(x, y), -90);
+    } else {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(displayScale, displayScale);
+      drawCar(v(0, 0), -90);
+      ctx.restore();
+    }
+    text(model.name, x, y + (MOBILE_PORTRAIT_LAYOUT ? 112 : 90), MOBILE_PORTRAIT_LAYOUT ? 28 : 24);
+  }
+
+  if (MOBILE_PORTRAIT_LAYOUT) {
+    const areaTop = 150;
+    const areaBottom = colorButtonY - 105;
+    const areaHeight = areaBottom - areaTop;
+    const rows = [areaTop + areaHeight / 6, areaTop + areaHeight / 2, areaTop + areaHeight * 5 / 6];
+    const positions = [
+      v(245, rows[0]), v(555, rows[0]),
+      v(245, rows[1]), v(555, rows[1]),
+      v(WIDTH / 2, rows[2]),
+    ];
+    for (let displayIndex = 0; displayIndex < displayOrder.length; displayIndex += 1) {
+      const modelIndex = displayOrder[displayIndex];
+      drawCarOption(CAR_MODELS[modelIndex], modelIndex, positions[displayIndex].x, positions[displayIndex].y, 1.65);
+    }
+  } else {
+    for (let displayIndex = 0; displayIndex < displayOrder.length; displayIndex += 1) {
+      const modelIndex = displayOrder[displayIndex];
+      const x = WIDTH / 2 + (displayIndex - 2) * 150;
+      const y = HEIGHT / 2 - 20 + Math.abs(displayIndex - 2) * 40;
+      drawCarOption(CAR_MODELS[modelIndex], modelIndex, x, y);
+    }
   }
   selectedCar = original;
-  const colorButtonY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.72 : HEIGHT - 100;
   drawButton("carColor", centeredRect(WIDTH / 2 - (MOBILE_PORTRAIT_LAYOUT ? 145 : 100), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 260 : 180, MOBILE_PORTRAIT_LAYOUT ? 72 : 50), "Car Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
   drawButton("boostColor", centeredRect(WIDTH / 2 + (MOBILE_PORTRAIT_LAYOUT ? 145 : 100), colorButtonY, MOBILE_PORTRAIT_LAYOUT ? 260 : 180, MOBILE_PORTRAIT_LAYOUT ? 72 : 50), "Boost Colour", OBSTACLE_MID, MOBILE_PORTRAIT_LAYOUT ? 32 : 28);
   drawBackButton();
@@ -2218,7 +2246,7 @@ function drawMapSelector(buttonKey, label, value, centerY) {
     const valueRect = rect(previous.x + previous.w, group.y, group.w - previous.w - next.w, group.h);
     buttons[buttonKey] = [[previous, -1], [next, 1]];
     text(label, WIDTH / 2, centerY - 66, 27, BEIGE);
-    roundedRect(group, rgb(OBSTACLE_MID), rgb(OBSTACLE_MID), 2, 9);
+    roundedRect(group, rgb(DARK_BROWN), rgb(DARK_BROWN), 2, 9);
     fitText("<", previous, 44, WHITE, 4, 4);
     fitText(value, valueRect, 30, WHITE, 8, 4);
     fitText(">", next, 44, WHITE, 4, 4);
@@ -2820,7 +2848,6 @@ window.CarCatch = {
     if (state === "game") return `${Math.max(0, selectedTime - (performance.now() - gameStartTime) / 1000).toFixed(1)}s`;
     return "";
   },
-  getCountdownValue: () => state === "countdown" ? String(Math.max(1, 3 - Math.floor((performance.now() - countdownStartTime) / 1000))) : "",
   getCurrentUser: () => currentUser ? { key: currentUser.key, username: currentUser.username } : null,
   getProfileStatus: () => profileMessage,
   goToMenu: () => {
