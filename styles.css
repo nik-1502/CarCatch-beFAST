@@ -39,7 +39,8 @@ canvas {
 .mobile-controls,
 .mobile-auth,
 .mobile-landscape-actions,
-.mobile-gameplay-back {
+.mobile-gameplay-back,
+.mobile-countdown {
   display: none;
 }
 
@@ -236,7 +237,7 @@ canvas {
 
   html.mobile-device .mobile-landscape-left {
     position: absolute;
-    top: max(14px, env(safe-area-inset-top));
+    top: max(24px, env(safe-area-inset-top));
     left: max(14px, env(safe-area-inset-left));
     display: none;
     flex-direction: column;
@@ -248,8 +249,8 @@ canvas {
   }
 
   html.mobile-device .mobile-landscape-actions button {
-    width: 58px;
-    height: 58px;
+    width: 76px;
+    height: 76px;
     padding: 0;
     border: 0;
     border-radius: 10px;
@@ -268,8 +269,8 @@ canvas {
 
   html.mobile-device .mobile-landscape-back {
     position: absolute;
-    top: max(14px, env(safe-area-inset-top));
-    right: max(14px, env(safe-area-inset-right));
+    top: max(24px, env(safe-area-inset-top));
+    right: max(24px, env(safe-area-inset-right));
     display: none;
     background: rgb(180, 60, 60) !important;
   }
@@ -281,11 +282,11 @@ canvas {
   html.mobile-device .mobile-gameplay-back:not([hidden]) {
     position: fixed;
     z-index: 9;
-    left: max(14px, env(safe-area-inset-left));
-    bottom: max(14px, env(safe-area-inset-bottom));
+    top: max(24px, env(safe-area-inset-top));
+    right: max(24px, env(safe-area-inset-right));
     display: block;
-    min-width: 78px;
-    min-height: 48px;
+    width: 76px;
+    height: 76px;
     padding: 6px 12px;
     border: 2px solid rgba(255, 255, 255, 0.32);
     border-radius: 10px;
@@ -293,6 +294,23 @@ canvas {
     background: rgb(180, 60, 60);
     font: 700 18px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
     touch-action: manipulation;
+  }
+
+  html.mobile-device .mobile-countdown:not([hidden]) {
+    position: fixed;
+    z-index: 7;
+    width: 76px;
+    height: 76px;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    border: 4px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.76);
+    font: 700 54px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+    line-height: 1;
+    pointer-events: none;
   }
 
   html.mobile-device .mobile-auth input {
@@ -330,8 +348,8 @@ canvas {
 
   @media (orientation: landscape) {
     html.mobile-device .mobile-gameplay-back:not([hidden]) {
-      top: max(14px, env(safe-area-inset-top));
-      right: max(14px, env(safe-area-inset-right));
+      top: max(24px, env(safe-area-inset-top));
+      right: max(24px, env(safe-area-inset-right));
       bottom: auto;
       left: auto;
     }
@@ -346,7 +364,7 @@ canvas {
 
     html.mobile-device .mobile-landscape-left {
       position: absolute;
-      top: max(14px, env(safe-area-inset-top));
+      top: max(24px, env(safe-area-inset-top));
       left: max(14px, env(safe-area-inset-left));
       display: none;
       flex-direction: row;
@@ -358,8 +376,8 @@ canvas {
     }
 
     html.mobile-device .mobile-landscape-actions button {
-      width: 50px;
-      height: 50px;
+      width: 76px;
+      height: 76px;
       padding: 0;
       border: 0;
       border-radius: 10px;
@@ -378,8 +396,8 @@ canvas {
 
     html.mobile-device .mobile-landscape-back {
       position: absolute;
-      top: max(14px, env(safe-area-inset-top));
-      right: max(14px, env(safe-area-inset-right));
+      top: max(24px, env(safe-area-inset-top));
+      right: max(24px, env(safe-area-inset-right));
       display: none;
       background: rgb(180, 60, 60) !important;
     }

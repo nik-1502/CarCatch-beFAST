@@ -22,6 +22,7 @@ if (isMobile) {
   const authPanel = document.querySelector(".mobile-auth");
   const landscapeActions = document.querySelector(".mobile-landscape-actions");
   const gameplayBack = document.querySelector(".mobile-gameplay-back");
+  const mobileCountdown = document.querySelector(".mobile-countdown");
   let activePointer = null;
   let joystickBounds = null;
   let joystickFrame = 0;
@@ -213,6 +214,20 @@ if (isMobile) {
     landscapeActions.classList.toggle("show-menu-actions", mobileMenu);
     landscapeActions.classList.toggle("show-back-action", mobileBack);
     gameplayBack.hidden = !gameplay;
+    const showCountdown = state === "countdown";
+    mobileCountdown.hidden = !showCountdown;
+    if (showCountdown) {
+      mobileCountdown.textContent = window.CarCatch?.getCountdownValue() || "3";
+      const mapBounds = canvas.getBoundingClientRect();
+      const joystickBounds = joystick.getBoundingClientRect();
+      const availableTop = mapBounds.bottom;
+      const availableBottom = joystickBounds.top;
+      const countdownY = availableBottom > availableTop
+        ? (availableTop + availableBottom) / 2
+        : Math.max(58, joystickBounds.top / 2);
+      mobileCountdown.style.left = `${window.innerWidth / 2}px`;
+      mobileCountdown.style.top = `${countdownY}px`;
+    }
     shell.classList.toggle("mobile-gameplay", gameplay);
     const nextCanvasLayoutMode = gameplay ? "gameplay" : "portrait-ui";
     if (canvasLayoutMode !== nextCanvasLayoutMode) {

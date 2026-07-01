@@ -1872,7 +1872,7 @@ function mobileScreenHeight() {
 }
 
 function drawSelectionTitle(label, fillColor, borderColor) {
-  const titleRect = centeredRect(WIDTH / 2, MOBILE_DEVICE ? 62 : 60, MOBILE_DEVICE ? 520 : 500, MOBILE_DEVICE ? 76 : 70);
+  const titleRect = centeredRect(WIDTH / 2, MOBILE_DEVICE ? 62 : 60, MOBILE_DEVICE ? 540 : 500, MOBILE_DEVICE ? 76 : 70);
   roundedRect(titleRect, rgb(fillColor), rgb(borderColor), 4, 10);
   const centeredTextArea = rect(titleRect.x, titleRect.y, titleRect.w, titleRect.h);
   fitText(label, centeredTextArea, MOBILE_DEVICE ? 45 : 42, WHITE, 24, 10, 3, TITLE_FONT_FAMILY);
@@ -2040,11 +2040,13 @@ function drawMenu() {
   drawProfileIconButton();
   drawLeaderboardIconButton();
   const screenHeight = mobileScreenHeight();
-  const startY = MOBILE_PORTRAIT_LAYOUT ? Math.max(280, screenHeight * 0.3) : 138;
-  const promptY = MOBILE_PORTRAIT_LAYOUT ? startY + 72 : 184;
   const timeTitleY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.47 : 293;
   const timeButtonsY = MOBILE_PORTRAIT_LAYOUT ? timeTitleY + 92 : 343;
   const settingsY = MOBILE_PORTRAIT_LAYOUT ? screenHeight * 0.7 : 490;
+  const startY = MOBILE_PORTRAIT_LAYOUT
+    ? timeTitleY - (settingsY - timeButtonsY) + 3
+    : 138;
+  const promptY = MOBILE_PORTRAIT_LAYOUT ? startY + 72 : 184;
   const startRect = centeredRect(WIDTH / 2, startY, MOBILE_PORTRAIT_LAYOUT ? 280 : 200, MOBILE_PORTRAIT_LAYOUT ? 92 : 60);
   buttons.start = startRect;
   roundedRect(startRect, rgb(KHAKI), rgb(WHITE), 3, 10);
@@ -2460,8 +2462,10 @@ function drawScoreboard() {
   ctx.save();
   if (scoreboardOffset) ctx.translate(0, scoreboardOffset);
   if (MOBILE_DEVICE) {
+    ctx.translate(0, MOBILE_PORTRAIT_LAYOUT ? 50 : 12);
     ctx.translate(WIDTH / 2, HEIGHT / 2);
-    ctx.scale(1.12, 1.12);
+    const scoreboardScale = MOBILE_PORTRAIT_LAYOUT ? 1.18 : 1.08;
+    ctx.scale(scoreboardScale, scoreboardScale);
     ctx.translate(-WIDTH / 2, -HEIGHT / 2);
   }
 
@@ -2536,8 +2540,9 @@ function drawScoreboard() {
     drawButton("replay", centeredRect(230, actionY, 280, 96), "Replay", OBSTACLE_MID, 42);
     drawButton("home", centeredRect(570, actionY, 280, 96), "Home", OBSTACLE_MID, 42);
   } else {
-    drawButton("replay", rect(50, HEIGHT - 80, 200, 50), "Replay", OBSTACLE_MID, 36);
-    drawButton("home", rect(WIDTH - 250, HEIGHT - 80, 200, 50), "Home", OBSTACLE_MID, 36);
+    const actionY = MOBILE_DEVICE ? HEIGHT - 68 : HEIGHT - 80;
+    drawButton("replay", rect(50, actionY, 200, 50), "Replay", OBSTACLE_MID, 36);
+    drawButton("home", rect(WIDTH - 250, actionY, 200, 50), "Home", OBSTACLE_MID, 36);
   }
 }
 
@@ -2592,9 +2597,10 @@ function drawCountdown() {
   const number = String(3 - Math.floor(elapsed));
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  const countdownY = MOBILE_DEVICE ? HEIGHT / 4 : HEIGHT / 2;
-  circle(v(WIDTH / 2, countdownY), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
-  text(number, WIDTH / 2, countdownY + 2, 96, WHITE);
+  if (!MOBILE_DEVICE) {
+    circle(v(WIDTH / 2, HEIGHT / 2), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
+    text(number, WIDTH / 2, HEIGHT / 2 + 2, 96, WHITE);
+  }
 }
 
 function drawFrame(now) {
@@ -2799,6 +2805,7 @@ window.addEventListener("keyup", (event) => {
 
 window.CarCatch = {
   getState: () => state,
+  getCountdownValue: () => state === "countdown" ? String(Math.max(1, 3 - Math.floor((performance.now() - countdownStartTime) / 1000))) : "",
   getCurrentUser: () => currentUser ? { key: currentUser.key, username: currentUser.username } : null,
   getProfileStatus: () => profileMessage,
   goToMenu: () => {
