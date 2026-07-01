@@ -141,6 +141,7 @@ if (isMobile) {
         <strong>${user.username}</strong>
         <p class="mobile-auth-status"></p>
         <button type="button" data-auth-action="logout">Sign Out</button>
+        <button type="button" data-auth-action="back">Back</button>
       `;
       bindAuthActions();
       return;
@@ -150,6 +151,7 @@ if (isMobile) {
       <label>Player Name<input name="account" autocomplete="nickname" maxlength="32"></label>
       <button type="button" data-auth-action="local-profile">Continue</button>
       <p class="mobile-auth-status"></p>
+      <button type="button" class="mobile-auth-back" data-auth-action="back">Back</button>
     `;
     bindAuthActions();
   }
@@ -229,18 +231,6 @@ if (isMobile) {
       }
       canvasLayoutMode = nextCanvasLayoutMode;
     }
-    const canvasBounds = canvas.getBoundingClientRect();
-    const logicalHeight = Number(canvas.dataset.logicalHeight) || 600;
-    const scaleX = canvasBounds.width / 800;
-    const scaleY = canvasBounds.height / logicalHeight;
-    const navigationSize = Math.max(34, 76 * scaleY);
-    landscapeActions.style.setProperty("--mobile-nav-size", `${navigationSize}px`);
-    landscapeActions.style.setProperty("--mobile-nav-top", `${canvasBounds.top + 24 * scaleY}px`);
-    landscapeActions.style.setProperty("--mobile-back-left", `${Math.min(
-      window.innerWidth - navigationSize - 8,
-      canvasBounds.left + 670 * scaleX + 24 * scaleX,
-    )}px`);
-    gameplayBack.style.setProperty("--mobile-nav-size", `${navigationSize}px`);
     if (!gameplay) releaseJoystick();
 
     const user = window.CarCatch?.getCurrentUser() || null;

@@ -248,14 +248,14 @@ canvas {
   }
 
   html.mobile-device .mobile-landscape-actions button {
-    width: var(--mobile-nav-size, 40px);
-    height: var(--mobile-nav-size, 40px);
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 0;
     border-radius: 10px;
     color: #fff;
     background: rgb(190, 120, 70);
-    font: 700 18px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+    font: 700 13px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
     pointer-events: auto;
   }
 
@@ -268,13 +268,10 @@ canvas {
 
   html.mobile-device .mobile-landscape-back {
     position: absolute;
-    top: var(--mobile-nav-top, 12px);
-    left: var(--mobile-back-left, auto);
-    right: auto;
+    top: max(24px, env(safe-area-inset-top));
+    right: max(24px, env(safe-area-inset-right));
     display: none;
     background: rgb(180, 60, 60) !important;
-    padding: 2px;
-    font-size: 13px;
   }
 
   html.mobile-device .show-back-action .mobile-landscape-back {
@@ -287,8 +284,8 @@ canvas {
     right: max(14px, env(safe-area-inset-right));
     bottom: max(14px, env(safe-area-inset-bottom));
     display: block;
-    width: var(--mobile-nav-size, 40px);
-    height: var(--mobile-nav-size, 40px);
+    width: 44px;
+    height: 44px;
     padding: 2px;
     border: 2px solid rgba(255, 255, 255, 0.32);
     border-radius: 10px;
@@ -361,14 +358,14 @@ canvas {
     }
 
     html.mobile-device .mobile-landscape-actions button {
-      width: var(--mobile-nav-size, 40px);
-      height: var(--mobile-nav-size, 40px);
+      width: 44px;
+      height: 44px;
       padding: 0;
       border: 0;
       border-radius: 10px;
       color: #fff;
       background: rgb(190, 120, 70);
-      font: 700 16px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
+      font: 700 13px "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif;
       pointer-events: auto;
     }
 
@@ -381,9 +378,8 @@ canvas {
 
     html.mobile-device .mobile-landscape-back {
       position: absolute;
-      top: var(--mobile-nav-top, 12px);
-      left: var(--mobile-back-left, auto);
-      right: auto;
+      top: max(24px, env(safe-area-inset-top));
+      right: max(24px, env(safe-area-inset-right));
       display: none;
       background: rgb(180, 60, 60) !important;
     }
