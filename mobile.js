@@ -22,6 +22,7 @@ if (isMobile) {
   const authPanel = document.querySelector(".mobile-auth");
   const landscapeActions = document.querySelector(".mobile-landscape-actions");
   const gameplayBack = document.querySelector(".mobile-gameplay-back");
+  const gameStatus = document.querySelector(".mobile-game-status");
   let activePointer = null;
   let joystickBounds = null;
   let joystickFrame = 0;
@@ -230,6 +231,28 @@ if (isMobile) {
         canvas.height = desiredCanvasHeight;
       }
       canvasLayoutMode = nextCanvasLayoutMode;
+    }
+    const canvasBounds = canvas.getBoundingClientRect();
+    const logicalHeight = Number(canvas.dataset.logicalHeight) || 600;
+    const scaleX = canvasBounds.width / 800;
+    const scaleY = canvasBounds.height / logicalHeight;
+    landscapeActions.style.setProperty("--mobile-back-top", `${canvasBounds.top + 24 * scaleY}px`);
+    landscapeActions.style.setProperty("--mobile-back-left", `${Math.min(
+      window.innerWidth - 52,
+      canvasBounds.left + 670 * scaleX + 14 * scaleX,
+    )}px`);
+
+    gameStatus.hidden = !gameplay;
+    if (gameplay) {
+      gameStatus.textContent = window.CarCatch?.getMobileGameStatus() || "";
+      const joystickArea = joystick.getBoundingClientRect();
+      if (joystickArea.top > canvasBounds.bottom) {
+        gameStatus.style.left = `${window.innerWidth / 2}px`;
+        gameStatus.style.top = `${(canvasBounds.bottom + joystickArea.top) / 2}px`;
+      } else {
+        gameStatus.style.left = `${joystickArea.left + joystickArea.width / 2}px`;
+        gameStatus.style.top = `${Math.max(38, joystickArea.top / 2)}px`;
+      }
     }
     if (!gameplay) releaseJoystick();
 

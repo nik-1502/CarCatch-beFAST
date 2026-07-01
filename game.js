@@ -1546,12 +1546,7 @@ function drawScore(remainingOverride = null) {
   roundedRect(box, "rgb(0,0,0)", rgb(WHITE), 2, 8);
   text(String(score), WIDTH / 2, HEIGHT / 2, 36);
   const remaining = remainingOverride ?? Math.max(0, selectedTime - (performance.now() - gameStartTime) / 1000);
-  if (MOBILE_DEVICE) {
-    const timerBox = centeredRect(WIDTH / 2, HEIGHT * 0.75, 154, 58);
-    roundedRect(rect(timerBox.x + 5, timerBox.y + 6, timerBox.w, timerBox.h), "rgba(0,0,0,0.38)", null, 1, 10);
-    roundedRect(timerBox, "rgba(30,33,39,0.94)", "rgb(116,124,136)", 4, 10);
-    text(`${remaining.toFixed(1)}s`, timerBox.x + timerBox.w / 2, timerBox.y + timerBox.h / 2 + 1, 34, WHITE);
-  } else {
+  if (!MOBILE_DEVICE) {
     text(`${remaining.toFixed(1)}s`, WIDTH - 100, 20, 36, WHITE, "left", "top");
   }
   if (!MOBILE_DEVICE) text("Press ENTER to leave", WIDTH - 20, 60, 24, WHITE, "right", "top");
@@ -2216,6 +2211,19 @@ function drawMapPreview(x, y, w, h) {
 }
 
 function drawMapSelector(buttonKey, label, value, centerY) {
+  if (MOBILE_PORTRAIT_LAYOUT) {
+    const group = rect(150, centerY - 32, 500, 64);
+    const previous = rect(group.x, group.y, 82, group.h);
+    const next = rect(group.x + group.w - 82, group.y, 82, group.h);
+    const valueRect = rect(previous.x + previous.w, group.y, group.w - previous.w - next.w, group.h);
+    buttons[buttonKey] = [[previous, -1], [next, 1]];
+    text(label, WIDTH / 2, centerY - 66, 27, BEIGE);
+    roundedRect(group, rgb(OBSTACLE_MID), rgb(OBSTACLE_MID), 2, 9);
+    fitText("<", previous, 44, WHITE, 4, 4);
+    fitText(value, valueRect, 30, WHITE, 8, 4);
+    fitText(">", next, 44, WHITE, 4, 4);
+    return;
+  }
   const previous = MOBILE_PORTRAIT_LAYOUT ? rect(300, centerY - 40, 94, 80) : rect(370, centerY - 17, 34, 34);
   const valueRect = MOBILE_PORTRAIT_LAYOUT ? rect(404, centerY - 32, 192, 64) : rect(414, centerY - 17, 172, 34);
   const next = MOBILE_PORTRAIT_LAYOUT ? rect(606, centerY - 40, 94, 80) : rect(596, centerY - 17, 34, 34);
@@ -2231,12 +2239,12 @@ function drawMapSelector(buttonKey, label, value, centerY) {
 function getMobileMapSettingsLayout() {
   const screenHeight = mobileScreenHeight();
   const bottomButtonY = screenHeight - 105;
-  const selectorGap = 110;
-  const selectorBottom = bottomButtonY - 170;
+  const selectorGap = 130;
+  const selectorBottom = bottomButtonY - 145;
   const selectorTop = selectorBottom - selectorGap * 2;
   const titleBottom = 100;
   const previewHeight = 375;
-  const previewBottomLimit = selectorTop - 40;
+  const previewBottomLimit = selectorTop - 100;
   const previewY = titleBottom + (previewBottomLimit - titleBottom - previewHeight) / 2;
   return {
     screenHeight,
@@ -2508,7 +2516,7 @@ function drawScoreboard() {
   ctx.restore();
 
   if (pendingScore) {
-    const startBounds = rect(210, 430, 380, 48);
+    const startBounds = MOBILE_DEVICE ? rect(210, 430, 380, 48) : rect(245, 430, 310, 60);
     if (!qualifies || moveProgressRaw === 0) {
       drawScorePanel(startBounds, "rgba(28,34,46,0.96)", "rgba(105,185,235,0.5)", 10);
       const scoreY = startBounds.y + startBounds.h / 2;
@@ -2599,9 +2607,10 @@ function drawCountdown() {
   const number = String(3 - Math.floor(elapsed));
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
-  const countdownY = MOBILE_DEVICE ? HEIGHT / 4 : HEIGHT / 2;
-  circle(v(WIDTH / 2, countdownY), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
-  text(number, WIDTH / 2, countdownY + 2, 96, WHITE);
+  if (!MOBILE_DEVICE) {
+    circle(v(WIDTH / 2, HEIGHT / 2), 82, "rgba(0,0,0,0.72)", rgb(WHITE), 4);
+    text(number, WIDTH / 2, HEIGHT / 2 + 2, 96, WHITE);
+  }
 }
 
 function drawFrame(now) {
@@ -2806,6 +2815,11 @@ window.addEventListener("keyup", (event) => {
 
 window.CarCatch = {
   getState: () => state,
+  getMobileGameStatus: () => {
+    if (state === "countdown") return String(Math.max(1, 3 - Math.floor((performance.now() - countdownStartTime) / 1000)));
+    if (state === "game") return `${Math.max(0, selectedTime - (performance.now() - gameStartTime) / 1000).toFixed(1)}s`;
+    return "";
+  },
   getCountdownValue: () => state === "countdown" ? String(Math.max(1, 3 - Math.floor((performance.now() - countdownStartTime) / 1000))) : "",
   getCurrentUser: () => currentUser ? { key: currentUser.key, username: currentUser.username } : null,
   getProfileStatus: () => profileMessage,
